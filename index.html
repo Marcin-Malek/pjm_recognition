@@ -285,7 +285,7 @@
             updateCountersUI();
         }
 
-        function getMirroredData(flatData) {
+        function getMirroredStaticData3D(flatData) {
             const mirrored = [];
             const wristX = flatData[0];
             for (let i = 0; i < flatData.length; i += 3) {
@@ -294,6 +294,34 @@
                 mirrored.push(flatData[i + 2]);          
             }
             return mirrored;
+        }
+
+        function getMirroredDynamicData2D(sequence) {
+            return sequence.map(frame => {
+                let mirroredFrame = [];
+                const wristX = frame[0];
+
+                for (let i = 0; i < frame.length; i += 2) {
+                    mirroredFrame.push(2 * wristX - frame[i]);
+                    mirroredFrame.push(frame[i + 1]);
+                }
+                return mirroredFrame;
+            });
+        }
+
+        function addNoise(sequence, noiseLevel = 0.005) {
+            return sequence.map(frame => 
+                frame.map(val => val + (Math.random() - 0.5) * noiseLevel)
+            );
+        }
+
+        function timeShift(sequence, shiftFrames) {
+            if (shiftFrames > 0) {
+                return [...sequence.slice(shiftFrames), ...Array(shiftFrames).fill(sequence[sequence.length - 1])];
+            } else {
+                const absShift = Math.abs(shiftFrames);
+                return [...Array(absShift).fill(sequence[0]), ...sequence.slice(0, sequence.length - absShift)];
+            }
         }
 
         function updateCountersUI() {
@@ -342,14 +370,15 @@
 
             classesStatic = [...new Set(datasetStatic.map(d => d.label))].sort();
             if (classesStatic.length >= 2) {
-                const augmentedStatic = [];
                 console.log("Original Static Dataset:", datasetStatic);
                 console.log("Unique Static Classes:", classesStatic);
-                datasetStatic.forEach(d => {
-                    augmentedStatic.push({ label: d.label, data: d.data }); 
-                    augmentedStatic.push({ label: d.label, data: getMirroredData(d.data) }); 
-                });
-                console.log("Static Dataset Size:", augmentedStatic.length);
+                const augmentedStatic = [
+                    ...datasetStatic,
+                    ...datasetStatic.flatMap(d => ([
+                        { label: d.label, data: getMirroredStaticData3D(d.data) },
+                    ]))
+                ];
+                console.log("Augmented Static Dataset:", augmentedStatic);
 
                 const xsStat = tf.tensor2d(augmentedStatic.map(d => d.data));
                 const ysStat = tf.tensor2d(augmentedStatic.map(d => {
@@ -379,14 +408,23 @@
 
             classesDynamic = [...new Set(datasetDynamic.map(d => d.label))].sort();
             if (classesDynamic.length >= 2) {
-                const augmentedDynamic = [];
                 console.log("Original Dynamic Dataset:", datasetDynamic);
                 console.log("Unique Dynamic Classes:", classesDynamic);
-                datasetDynamic.forEach(d => {
-                    augmentedDynamic.push({ label: d.label, data: d.data }); 
-                    // augmentedDynamic.push({ label: d.label, data: d.data.map(frame => getMirroredData(frame)) }); 
-                });
-                console.log("Dynamic Dataset Size:", augmentedDynamic.length);
+                const augmentedDynamic = [
+                    ...datasetDynamic,
+                    ...datasetDynamic.flatMap(d => ([
+                        { label: d.label, data: getMirroredDynamicData2D(d.data) },
+                        { label: d.label, data: addNoise(d.data, 0.005) },
+                        { label: d.label, data: addNoise(getMirroredDynamicData2D(d.data), 0.005) },
+                        { label: d.label, data: addNoise(d.data, 0.01) },
+                        { label: d.label, data: addNoise(getMirroredDynamicData2D(d.data), 0.01) },
+                        { label: d.label, data: timeShift(d.data, 2) },
+                        { label: d.label, data: timeShift(getMirroredDynamicData2D(d.data), 2) },
+                        { label: d.label, data: timeShift(d.data, -2) },
+                        { label: d.label, data: timeShift(getMirroredDynamicData2D(d.data), -2) },
+                    ]))
+                ];
+                console.log("Augmented Dynamic Dataset:", augmentedDynamic);
 
                 const xsDyn = tf.tensor3d(augmentedDynamic.map(d => d.data), [augmentedDynamic.length, SEQUENCE_LENGTH, 42]);
                 const ysDyn = tf.tensor2d(augmentedDynamic.map(d => {
