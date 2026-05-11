@@ -60,7 +60,6 @@
     <button id="btnTrain" disabled>Zbierz dane, aby wytrenować modele</button>
     
     <div class="btn-row">
-        <!-- Ukryty input do importu -->
         <input type="file" id="fileInput" accept=".json" style="display: none;">
         <button id="btnImportData" class="btn-import">📂 Wgraj Dataset</button>
         <button id="btnExportData" class="btn-export" disabled>💾 Pobierz Dataset (.json)</button>
@@ -94,7 +93,10 @@
         const SEQUENCE_LENGTH = 30;
         let liveBuffers = { Left: [], Right: [] }; 
 
-        let previousPredictions = [];
+        let dynamicHolds = { Left: { label: null, expires: 0 }, Right: { label: null, expires: 0 } };
+
+        const IGNORE_DYNAMIC = 'IDLE_DYN';
+        const IGNORE_STATIC = 'IDLE_STAT'; 
 
         let recordingLabel = null;
         let recordingSequence = []; 
@@ -159,50 +161,63 @@
                     if (liveBuffers[handedness].length > SEQUENCE_LENGTH) liveBuffers[handedness].shift();
 
                     if (!recordingLabel && (modelStatic || modelDynamic)) {
-                        let lastPred = previousPredictions.find(p => p.handedness === handedness)?.text
-                        let finalPrediction = lastPred?.includes("(Dyn)") ? lastPred : "🤔";
-                        let predictionColor = "white";
+                        let finalPrediction = "🤔";
+                        let predictionColor = "gray";
+                        const now = Date.now();
 
                         tf.tidy(() => {
                             let dynamicFound = false;
                             const currentBuffer = liveBuffers[handedness];
+                            
+                            if (dynamicHolds[handedness]?.expires > now) {
+                                finalPrediction = dynamicHolds[handedness].label;
+                                predictionColor = "#E91E63";
+                                dynamicFound = true;
+                            }
 
-                            if (modelDynamic && currentBuffer.length === SEQUENCE_LENGTH) {
-                               const inputTensor = tf.tensor3d([currentBuffer], [1, SEQUENCE_LENGTH, 63]);
-                               const prediction = modelDynamic.predict(inputTensor);
-                               const scores = prediction.dataSync();
-                               const maxScore = Math.max(...scores);
-                               
-                               if (maxScore > 0.80) { 
-                                   finalPrediction = `${classesDynamic[scores.indexOf(maxScore)]} (Dyn)`;
-                                   predictionColor = "#E91E63";
-                                   dynamicFound = true;
-                                   
-                                   liveBuffers[handedness] = [];
-                               }
+                            if (!dynamicFound && modelDynamic && currentBuffer.length === SEQUENCE_LENGTH) {
+                                const inputTensor = tf.tensor3d([currentBuffer], [1, SEQUENCE_LENGTH, 63]);
+                                const prediction = modelDynamic.predict(inputTensor);
+                                const scores = prediction.dataSync();
+                                const maxScore = Math.max(...scores);
+                                const predictedClass = classesDynamic[scores.indexOf(maxScore)];
+                                
+                                console.log(`[DYN ${handedness}] ${predictedClass} (${(maxScore*100).toFixed(1)}%)`);
+
+                                if (maxScore > 0.8) { 
+                                    if (IGNORE_DYNAMIC === predictedClass) {
+                                        liveBuffers[handedness] = [];
+                                    } else {
+                                        finalPrediction = `${predictedClass} (Dyn)`;
+                                        dynamicHolds[handedness] = { label: finalPrediction, expires: now + 1500 };
+                                    predictionColor = "#E91E63";
+                                    dynamicFound = true;
+                                    liveBuffers[handedness] = [];
+                                    }
+                                }
                             }
 
                             if (!dynamicFound && modelStatic) {
-                               const inputTensor = tf.tensor2d([flatData]);
-                               const prediction = modelStatic.predict(inputTensor);
-                               const scores = prediction.dataSync();
-                               const maxScore = Math.max(...scores);
-                               
-                               if (maxScore > 0.7) {
-                                   finalPrediction = `${classesStatic[scores.indexOf(maxScore)]} (Stat)`;
-                                   predictionColor = "#2196F3";
-                               }
+                                const inputTensor = tf.tensor2d([flatData]);
+                                const prediction = modelStatic.predict(inputTensor);
+                                const scores = prediction.dataSync();
+                                const maxScore = Math.max(...scores);
+                                const predictedClass = classesStatic[scores.indexOf(maxScore)];
+                                
+                                // console.log(`[STAT] Dłoń: ${handedness} | Max: ${predictedClass} (${(maxScore*100).toFixed(1)}%)`);
+
+                                if (maxScore > 0.9 && predictedClass !== IGNORE_STATIC) {
+                                    finalPrediction = `${predictedClass} (Stat)`;
+                                    predictionColor = "#2196F3";
+                                }
                             }
                         });
+
                         allPredictions.push({ handedness, text: finalPrediction, color: predictionColor });
                     }
                 });
 
                 if (allPredictions.length > 0) {
-                    if (JSON.stringify(allPredictions) !== JSON.stringify(previousPredictions)) {
-                        console.table(allPredictions.map(p => ({ Dłoń: p.handedness, Predykcja: p.text })));
-                        previousPredictions = allPredictions;
-                    }
                     predictionContainer.innerHTML = allPredictions.sort((a, b) => a.handedness.localeCompare(b.handedness)).map(p => 
                         `<div class="hand-prediction" style="color: ${p.color}; margin: 0 10px;">${p.handedness}: ${p.text}</div>`
                     ).join('');
@@ -219,7 +234,6 @@
         function standardizeSequence(seq, targetLength) {
             if (seq.length === 0) return new Array(targetLength).fill(new Array(63).fill(0));
             if (seq.length === targetLength) return seq;
-            
             const result = [];
             if (seq.length < targetLength) {
                 result.push(...seq);
@@ -376,17 +390,16 @@
             reader.onload = (e) => {
                 try {
                     const importedData = JSON.parse(e.target.result);
-                    
                     if (importedData.static) datasetStatic = [...datasetStatic, ...importedData.static];
                     if (importedData.dynamic) datasetDynamic = [...datasetDynamic, ...importedData.dynamic];
                     
                     updateCountersUI();
-                    alert("Dataset wgrany pomyślnie! Kliknij 'Trenuj', aby odbudować model z nowymi danymi.");
+                    alert("Dataset wgrany pomyślnie! Kliknij 'Trenuj'.");
                     
                     modelStatic = null;
                     modelDynamic = null;
                 } catch (err) {
-                    alert("Błąd! Plik jest uszkodzony lub ma zły format.");
+                    alert("Błąd! Plik jest uszkodzony.");
                     console.error(err);
                 }
                 fileInput.value = "";
