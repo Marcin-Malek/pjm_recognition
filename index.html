@@ -141,17 +141,21 @@
                 let allPredictions = [];
 
                 hands.forEach((hand, index) => {
-                    const flatData = hand.keypoints3D.map(p => [p.x, p.y, p.z]).flat();
+                    const staticData = hand.keypoints3D.map(p => [p.x, p.y, p.z]).flat();
+                    const dynamicData = hand.keypoints.map(p => [
+                        p.x / canvas.width, 
+                        p.y / canvas.height
+                    ]).flat();
                     const { handedness } = hand;
 
                     if (recordingLabel && index === 0) { // Only record the first detected hand for simplicity
                         if (gestureTypeSelect.value === 'static') {
-                            datasetStatic.push({ label: recordingLabel, data: flatData });
+                            datasetStatic.push({ label: recordingLabel, data: staticData });
                             
                             if (isIdleRecording && datasetStatic.length % 30 === 0) updateCountersUI();
                             
                         } else {
-                            recordingSequence.push(flatData);
+                            recordingSequence.push(dynamicData);
                             
                             if (isIdleRecording && recordingSequence.length >= SEQUENCE_LENGTH) {
                                 datasetDynamic.push({ label: recordingLabel, data: [...recordingSequence] });
@@ -176,7 +180,7 @@
                     });
 
                     if (!liveBuffers[handedness]) liveBuffers[handedness] = [];
-                    liveBuffers[handedness].push(flatData);
+                    liveBuffers[handedness].push(dynamicData);
                     if (liveBuffers[handedness].length > SEQUENCE_LENGTH) liveBuffers[handedness].shift();
 
                     if (!recordingLabel && (modelStatic || modelDynamic)) {
@@ -195,7 +199,7 @@
                             }
 
                             if (!dynamicFound && modelDynamic && currentBuffer.length === SEQUENCE_LENGTH) {
-                                const inputTensor = tf.tensor3d([currentBuffer], [1, SEQUENCE_LENGTH, 63]);
+                                const inputTensor = tf.tensor3d([currentBuffer], [1, SEQUENCE_LENGTH, 42]);
                                 const prediction = modelDynamic.predict(inputTensor);
                                 const scores = prediction.dataSync();
                                 const maxScore = Math.max(...scores);
@@ -217,7 +221,7 @@
                             }
 
                             if (!dynamicFound && modelStatic) {
-                                const inputTensor = tf.tensor2d([flatData]);
+                                const inputTensor = tf.tensor2d([staticData]);
                                 const prediction = modelStatic.predict(inputTensor);
                                 const scores = prediction.dataSync();
                                 const maxScore = Math.max(...scores);
@@ -339,53 +343,80 @@
             classesStatic = [...new Set(datasetStatic.map(d => d.label))].sort();
             if (classesStatic.length >= 2) {
                 const augmentedStatic = [];
+                console.log("Original Static Dataset:", datasetStatic);
+                console.log("Unique Static Classes:", classesStatic);
                 datasetStatic.forEach(d => {
                     augmentedStatic.push({ label: d.label, data: d.data }); 
                     augmentedStatic.push({ label: d.label, data: getMirroredData(d.data) }); 
                 });
+                console.log("Static Dataset Size:", augmentedStatic.length);
 
                 const xsStat = tf.tensor2d(augmentedStatic.map(d => d.data));
                 const ysStat = tf.tensor2d(augmentedStatic.map(d => {
                     const oneHot = new Array(classesStatic.length).fill(0);
-                    oneHot[classesStatic.indexOf(d.label)] = 1; return oneHot;
+                    oneHot[classesStatic.indexOf(d.label)] = 1; 
+                    return oneHot;
                 }));
+                console.log("xsStat:", xsStat);
+                console.log("ysStat:", ysStat);
 
                 const mStat = tf.sequential();
                 mStat.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [63] }));
                 mStat.add(tf.layers.dense({ units: classesStatic.length, activation: 'softmax' }));
                 mStat.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
-                await mStat.fit(xsStat, ysStat, { epochs: 30 });
+                await mStat.fit(xsStat, ysStat, { epochs: 30, shuffle: true });
+
+                const evalResult = mStat.evaluate(xsStat, ysStat);
+                console.log(`Static model evaluation:
+                Loss: ${evalResult[0].dataSync()[0].toFixed(4)}, 
+                Accuracy: ${(evalResult[1].dataSync()[0] * 100).toFixed(2)}%
+                `);
                 
                 modelStatic = mStat;
-                xsStat.dispose(); ysStat.dispose();
+                xsStat.dispose(); 
+                ysStat.dispose();
             }
 
             classesDynamic = [...new Set(datasetDynamic.map(d => d.label))].sort();
             if (classesDynamic.length >= 2) {
                 const augmentedDynamic = [];
+                console.log("Original Dynamic Dataset:", datasetDynamic);
+                console.log("Unique Dynamic Classes:", classesDynamic);
                 datasetDynamic.forEach(d => {
                     augmentedDynamic.push({ label: d.label, data: d.data }); 
-                    augmentedDynamic.push({ label: d.label, data: d.data.map(frame => getMirroredData(frame)) }); 
+                    // augmentedDynamic.push({ label: d.label, data: d.data.map(frame => getMirroredData(frame)) }); 
                 });
+                console.log("Dynamic Dataset Size:", augmentedDynamic.length);
 
-                const xsDyn = tf.tensor3d(augmentedDynamic.map(d => d.data), [augmentedDynamic.length, SEQUENCE_LENGTH, 63]);
+                const xsDyn = tf.tensor3d(augmentedDynamic.map(d => d.data), [augmentedDynamic.length, SEQUENCE_LENGTH, 42]);
                 const ysDyn = tf.tensor2d(augmentedDynamic.map(d => {
                     const oneHot = new Array(classesDynamic.length).fill(0);
-                    oneHot[classesDynamic.indexOf(d.label)] = 1; return oneHot;
+                    oneHot[classesDynamic.indexOf(d.label)] = 1; 
+                    return oneHot;
                 }));
+                console.log("xsDyn:", xsDyn);
+                console.log("ysDyn:", ysDyn);
 
                 const mDyn = tf.sequential();
-                mDyn.add(tf.layers.conv1d({ filters: 32, kernelSize: 3, activation: 'relu', inputShape: [SEQUENCE_LENGTH, 63] }));
+                mDyn.add(tf.layers.conv1d({ filters: 32, kernelSize: 3, activation: 'relu', inputShape: [SEQUENCE_LENGTH, 42] }));
                 mDyn.add(tf.layers.maxPooling1d({ poolSize: 2 }));
                 mDyn.add(tf.layers.flatten());
                 mDyn.add(tf.layers.dense({ units: 32, activation: 'relu' }));
                 mDyn.add(tf.layers.dense({ units: classesDynamic.length, activation: 'softmax' }));
                 
                 mDyn.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
-                await mDyn.fit(xsDyn, ysDyn, { epochs: 40 });
+                await mDyn.fit(xsDyn, ysDyn, { epochs: 40, shuffle: true });
+
+                console.log("Model dynamiczny wytrenowany.");
+                const evalResult = mDyn.evaluate(xsDyn, ysDyn);
+                console.log(`Dynamic model evaluation:
+                Loss: ${evalResult[0].dataSync()[0].toFixed(4)}, 
+                Accuracy: ${(evalResult[1].dataSync()[0] * 100).toFixed(2)}%
+                `);
                 
                 modelDynamic = mDyn;
-                xsDyn.dispose(); ysDyn.dispose();
+                xsDyn.dispose(); 
+                ysDyn.dispose();
             }
 
             btnTrain.innerText = "Modele Gotowe! ✔️";
