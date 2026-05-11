@@ -15,6 +15,11 @@
         .controls { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: inline-block; margin-bottom: 20px; }
         select { padding: 10px; font-size: 16px; border-radius: 5px; border: 2px solid #2196F3; font-weight: bold; cursor: pointer; }
         
+        .btn-idle { background-color: #9E9E9E; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 16px; margin-left: 10px;}
+        .btn-idle:hover { background-color: #757575; }
+        .btn-idle.active { background-color: #f44336; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
         #recordingIndicator { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(255, 0, 0, 0.9); color: white; padding: 10px 20px; border-radius: 8px; font-size: 24px; font-weight: bold; display: none; z-index: 10; }
         #predictionContainer { position: absolute; bottom: 20px; left: 0; width: 100%; display: flex; justify-content: center; pointer-events: none; }
         .hand-prediction { background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 8px; font-size: 24px; font-weight: bold; }
@@ -46,7 +51,10 @@
             <option value="static">📸 Gest Statyczny (np. A, B, C)</option>
             <option value="dynamic">🎬 Gest Dynamiczny (np. J, Z)</option>
         </select>
-        <p style="margin: 10px 0 0 0; color: #555;">Trzymaj literę na klawiaturze (np. <kbd>J</kbd>), aby nagrać gest. Tylko jedna dłoń w kadrze przy nagrywaniu!</p>
+        
+        <button id="btnRecordIdle" class="btn-idle">Nagrywanie idle</button>
+        
+        <p style="margin: 10px 0 0 0; color: #555;">Trzymaj literę na klawiaturze (np. <kbd>J</kbd>), aby nagrać konkretny gest.</p>
     </div>
 
     <div class="container">
@@ -77,10 +85,11 @@
         const btnTrain = document.getElementById('btnTrain');
         const btnExportData = document.getElementById('btnExportData');
         const btnImportData = document.getElementById('btnImportData');
+        const btnRecordIdle = document.getElementById('btnRecordIdle');
         const fileInput = document.getElementById('fileInput');
         
         let detector;
-        
+
         let modelStatic = null;
         let modelDynamic = null;
         
@@ -100,6 +109,7 @@
 
         let recordingLabel = null;
         let recordingSequence = []; 
+        let isIdleRecording = false;
 
         const fingerConnections = [
             [0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [9, 10, 11, 12], 
@@ -137,8 +147,17 @@
                     if (recordingLabel && index === 0) { // Only record the first detected hand for simplicity
                         if (gestureTypeSelect.value === 'static') {
                             datasetStatic.push({ label: recordingLabel, data: flatData });
+                            
+                            if (isIdleRecording && datasetStatic.length % 30 === 0) updateCountersUI();
+                            
                         } else {
                             recordingSequence.push(flatData);
+                            
+                            if (isIdleRecording && recordingSequence.length >= SEQUENCE_LENGTH) {
+                                datasetDynamic.push({ label: recordingLabel, data: [...recordingSequence] });
+                                recordingSequence = [];
+                                updateCountersUI();
+                            }
                         }
                     }
 
@@ -168,7 +187,7 @@
                         tf.tidy(() => {
                             let dynamicFound = false;
                             const currentBuffer = liveBuffers[handedness];
-                            
+
                             if (dynamicHolds[handedness]?.expires > now) {
                                 finalPrediction = dynamicHolds[handedness].label;
                                 predictionColor = "#E91E63";
@@ -190,9 +209,9 @@
                                     } else {
                                         finalPrediction = `${predictedClass} (Dyn)`;
                                         dynamicHolds[handedness] = { label: finalPrediction, expires: now + 1500 };
-                                    predictionColor = "#E91E63";
-                                    dynamicFound = true;
-                                    liveBuffers[handedness] = [];
+                                        predictionColor = "#E91E63";
+                                        dynamicFound = true;
+                                        liveBuffers[handedness] = [];
                                     }
                                 }
                             }
@@ -203,7 +222,7 @@
                                 const scores = prediction.dataSync();
                                 const maxScore = Math.max(...scores);
                                 const predictedClass = classesStatic[scores.indexOf(maxScore)];
-                                
+
                                 // console.log(`[STAT] Dłoń: ${handedness} | Max: ${predictedClass} (${(maxScore*100).toFixed(1)}%)`);
 
                                 if (maxScore > 0.9 && predictedClass !== IGNORE_STATIC) {
@@ -212,7 +231,7 @@
                                 }
                             }
                         });
-
+                        
                         allPredictions.push({ handedness, text: finalPrediction, color: predictionColor });
                     }
                 });
@@ -249,7 +268,7 @@
         }
 
         function stopRecording() {
-            if (!recordingLabel) return;
+            if (!recordingLabel || isIdleRecording) return;
 
             if (gestureTypeSelect.value === 'dynamic' && recordingSequence.length > 0) {
                 const standardizedSeq = standardizeSequence(recordingSequence, SEQUENCE_LENGTH);
@@ -398,7 +417,7 @@
                     
                     modelStatic = null;
                     modelDynamic = null;
-                } catch (err) {
+                } catch (err) { 
                     alert("Błąd! Plik jest uszkodzony.");
                     console.error(err);
                 }
@@ -407,8 +426,30 @@
             reader.readAsText(file);
         });
 
+        btnRecordIdle.addEventListener('click', () => {
+            isIdleRecording = !isIdleRecording;
+            
+            if (isIdleRecording) {
+                btnRecordIdle.classList.add('active');
+                btnRecordIdle.innerText = "⏹ Zatrzymaj nagrywanie";
+                
+                recordingLabel = gestureTypeSelect.value === 'static' ? 'IDLE_STAT' : 'IDLE_DYN';
+                recordingSequence = []; 
+                
+                recordingIndicator.innerText = `🔴 Nagrywanie Tła (${recordingLabel})...`;
+                recordingIndicator.style.display = "block";
+            } else {
+                btnRecordIdle.classList.remove('active');
+                btnRecordIdle.innerText = "Nagrywanie idle";
+                
+                recordingLabel = null;
+                recordingIndicator.style.display = "none";
+                updateCountersUI();
+            }
+        });
+
         document.addEventListener('keydown', (e) => {
-            if (e.repeat) return; 
+            if (e.repeat || isIdleRecording) return; 
             if (/^[a-zA-Z]$/.test(e.key)) {
                 recordingLabel = e.key.toUpperCase();
                 recordingIndicator.innerText = `🔴 Nagrywanie (${gestureTypeSelect.value}): ${recordingLabel}...`;
@@ -417,7 +458,7 @@
         });
 
         document.addEventListener('keyup', (e) => {
-            if (/^[a-zA-Z]$/.test(e.key) && recordingLabel) {
+            if (/^[a-zA-Z]$/.test(e.key) && recordingLabel && !isIdleRecording) {
                 stopRecording(); 
             }
         });
