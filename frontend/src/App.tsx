@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useEffect, useReducer } from 'react';
+import type { ChangeEvent } from 'react';
 import styled from 'styled-components';
 import * as tf from '@tensorflow/tfjs';
 import { useHandPose } from './hooks/useHandPose';
-import { SEQUENCE_LENGTH } from './consts';
-import { 
-  standardizeSequence, getMirroredStaticData3D, 
-  getMirroredDynamicData2D, addNoise, timeShift 
-} from './utils/mlUtils';
+import { IGNORE_DYNAMIC, IGNORE_STATIC, SEQUENCE_LENGTH } from './consts';
+import { theme } from './utils/colors';
+import { standardizeSequence } from './utils/mlUtils';
+import { exportDataset, handleImportDataset } from './utils/files';
+import { trainModels as runModelTraining } from './utils/modelTraining';
 import type { Hand } from '@tensorflow-models/hand-pose-detection';
 import { isKeypoint3D } from './utils/typeUtils';
 
@@ -16,21 +17,21 @@ const Container = styled.div`
   align-items: center; 
   justify-content: center;
   min-height: 100vh; 
-  background-color: #0f172a; 
-  color: #f8fafc; 
+  background-color: ${theme.background}; 
+  color: ${theme.text}; 
   font-family: sans-serif; 
   padding: 2rem;
 `;
 const Title = styled.h1`
   font-size: 3rem; 
-  color: #38bdf8; 
+  color: ${theme.primary}; 
   margin-bottom: 1rem;
 `;
 const VideoWrapper = styled.div`
   position: relative; 
   width: 640px; 
-  height: 480px; 
-  background-color: #000;
+  height: 480px;
+  background-color: black;
   border-radius: 12px; 
   overflow: hidden; 
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); 
@@ -48,41 +49,99 @@ const VideoWrapper = styled.div`
   canvas { z-index: 10; }
 `;
 const ControlsPanel = styled.div`
-  display: flex; gap: 1rem; align-items: center; background: #1e293b; padding: 1.5rem;
-  border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); flex-wrap: wrap; justify-content: center;
+  display: flex; 
+  gap: 1rem; 
+  align-items: center; 
+  background: ${theme.surface}; 
+  padding: 1.5rem;
+  border-radius: 12px; 
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+  flex-wrap: wrap; 
+  justify-content: center;
 `;
 const Select = styled.select`
-  padding: 0.8rem; font-size: 1.1rem; border-radius: 8px; background: #334155; color: white;
-  border: 2px solid #475569; outline: none; cursor: pointer;
+  padding: 0.8rem; 
+  font-size: 1.1rem; 
+  border-radius: 8px; 
+  background: ${theme.surface}; 
+  color: ${theme.text};
+  border: 2px solid ${theme.primary}; 
+  outline: none; 
+  cursor: pointer;
 `;
 const Button = styled.button<{ $variant?: 'record' | 'export' | 'clear' | 'train' | 'idle', $isActive?: boolean }>`
   background-color: ${(props) => {
-    if (props.$variant === 'record') return props.$isActive ? '#ef4444' : '#3b82f6';
-    if (props.$variant === 'export') return '#f59e0b';
-    if (props.$variant === 'clear') return '#64748b';
-    if (props.$variant === 'train') return '#10b981';
-    if (props.$variant === 'idle') return props.$isActive ? '#ef4444' : '#64748b';
-    return '#3b82f6';
+    if (props.$variant === 'record') return props.$isActive ? theme.secondary : theme.primary;
+    if (props.$variant === 'export') return theme.warning;
+    if (props.$variant === 'clear') return theme.neutral;
+    if (props.$variant === 'train') return theme.success;
+    if (props.$variant === 'idle') return props.$isActive ? theme.secondary : theme.neutral;
+    return theme.primary;
   }};
-  color: white; font-size: 1.1rem; font-weight: bold; padding: 0.8rem 1.5rem; border: none;
-  border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
-  &:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.7; }
-  &:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+  color: white; 
+  font-size: 1.1rem; 
+  font-weight: bold; 
+  padding: 0.8rem 1.5rem; 
+  border: none;
+  border-radius: 8px; 
+  cursor: pointer; 
+  transition: all 0.2s ease;
+  &:disabled { 
+    background-color: ${theme.disabled}; 
+    cursor: not-allowed; 
+    opacity: 0.7; 
+  }
+  &:hover:not(:disabled) { 
+    transform: translateY(-2px); 
+    filter: brightness(1.1); 
+  }
 `;
-const BadgeContainer = styled.div`display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 20px; max-width: 800px;`;
+const BadgeContainer = styled.div`
+  display: flex; 
+  gap: 10px; 
+  flex-wrap: wrap; 
+  justify-content: center; 
+  margin-top: 20px; 
+  max-width: 800px;
+`;
 const Badge = styled.div<{ $type: 'static' | 'dynamic' }>`
-  background: ${props => props.$type === 'static' ? '#3b82f6' : '#ec4899'};
-  color: white; padding: 8px 15px; border-radius: 5px; font-size: 1rem; font-weight: bold; display: flex; align-items: center; gap: 10px;
+  background: ${props => props.$type === 'static' ? theme.primary : theme.secondary};
+  color: white; 
+  padding: 8px 15px; 
+  border-radius: 5px; 
+  font-size: 1rem; 
+  font-weight: bold; 
+  display: flex; 
+  align-items: center; gap: 10px;
 `;
 const DeleteBtn = styled.button`
-  background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; color: white;
-  &:hover { background: rgba(255,0,0,0.8); }
+  background: ${theme.badgeControlBg}; 
+  border: none; 
+  border-radius: 50%; 
+  width: 24px; 
+  height: 24px; 
+  cursor: pointer; 
+  color: white;
+  &:hover { background: ${theme.deleteHighlight}; }
 `;
 const PredictionsOverlay = styled.div`
-  position: absolute; bottom: 20px; left: 0; width: 100%; display: flex; justify-content: center; z-index: 20; pointer-events: none; gap: 10px;
+  position: absolute; 
+  bottom: 20px; 
+  left: 0; 
+  width: 100%; 
+  display: flex; 
+  justify-content: center; 
+  z-index: 20; 
+  pointer-events: none; 
+  gap: 10px;
 `;
 const PredictionBadge = styled.div`
-  background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 8px; font-size: 1.5rem; font-weight: bold;
+  background: rgba(0,0,0,0.8); 
+  color: white; 
+  padding: 10px 20px; 
+  border-radius: 8px; 
+  font-size: 1.5rem; 
+  font-weight: bold;
 `;
 
 const App = () => {
@@ -95,7 +154,7 @@ const App = () => {
   const [recordMode, setRecordMode] = useState<'static' | 'dynamic'>('static');
   const [sequenceProgress, setSequenceProgress] = useState(0);
   const [isTraining, setIsTraining] = useState(false);
-  
+
   const [, forceUpdate] = useReducer(x => x + 1, 0);
 
   const [models, setModels] = useState<{ static: tf.LayersModel | null, dynamic: tf.LayersModel | null }>({ static: null, dynamic: null });
@@ -108,7 +167,7 @@ const App = () => {
   const recordModeRef = useRef(recordMode);
   const currentLabelRef = useRef(currentLabel);
   const modelsRef = useRef(models);
-  
+
   const liveBuffersRef = useRef<{ Left: number[][], Right: number[][] }>({ Left: [], Right: [] });
   const dynamicHoldsRef = useRef<{ [key: string]: { label: string, expires: number } }>({ Left: { label: '', expires: 0 }, Right: { label: '', expires: 0 } });
 
@@ -120,7 +179,7 @@ const App = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || isIdleRecordingRef.current) return; 
+      if (e.repeat || isIdleRecordingRef.current) return;
       if (/^[a-zA-Z]$/.test(e.key)) {
         setCurrentLabel(e.key.toUpperCase());
         setIsRecording(true);
@@ -175,7 +234,7 @@ const App = () => {
         } else {
           sequenceBufferRef.current.push(dynamicData);
           setSequenceProgress((sequenceBufferRef.current.length / SEQUENCE_LENGTH) * 100);
-          
+
           if (isIdleRecordingRef.current && sequenceBufferRef.current.length >= SEQUENCE_LENGTH) {
             datasetRef.current.dynamic.push({ label: currentLabelRef.current, data: [...sequenceBufferRef.current] });
             sequenceBufferRef.current = [];
@@ -186,8 +245,8 @@ const App = () => {
       }
 
       if (!isRecordingRef.current && !isIdleRecordingRef.current) {
-        if (!liveBuffersRef.current[handedness as 'Left'|'Right']) liveBuffersRef.current[handedness as 'Left'|'Right'] = [];
-        const buffer = liveBuffersRef.current[handedness as 'Left'|'Right'];
+        if (!liveBuffersRef.current[handedness as 'Left' | 'Right']) liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
+        const buffer = liveBuffersRef.current[handedness as 'Left' | 'Right'];
         buffer.push(dynamicData);
         if (buffer.length > SEQUENCE_LENGTH) buffer.shift();
 
@@ -198,7 +257,7 @@ const App = () => {
         tf.tidy(() => {
           if (dynamicHoldsRef.current[handedness]?.expires > now) {
             finalPrediction = dynamicHoldsRef.current[handedness].label;
-            predictionColor = "#ec4899";
+            predictionColor = theme.secondary;
             dynamicFound = true;
           }
 
@@ -212,14 +271,14 @@ const App = () => {
             const predictedClass = classesDynamic[classIdx];
 
             if (maxScore > 0.8) {
-              if (predictedClass === 'IDLE_DYN') {
-                liveBuffersRef.current[handedness as 'Left'|'Right'] = [];
+              if (predictedClass === IGNORE_DYNAMIC) {
+                liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
               } else {
                 finalPrediction = `${predictedClass}`;
                 dynamicHoldsRef.current[handedness] = { label: finalPrediction, expires: now + 1500 };
-                predictionColor = "#ec4899";
+                predictionColor = theme.secondary;
                 dynamicFound = true;
-                liveBuffersRef.current[handedness as 'Left'|'Right'] = [];
+                liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
               }
             }
           }
@@ -232,9 +291,9 @@ const App = () => {
             const classesStatic = [...new Set(datasetRef.current.static.map(d => d.label))].sort();
             const predictedClass = classesStatic[scores.indexOf(maxScore)];
 
-            if (maxScore > 0.9 && predictedClass !== 'IDLE_STAT') {
+            if (maxScore > 0.9 && predictedClass !== IGNORE_STATIC) {
               finalPrediction = `${predictedClass}`;
-              predictionColor = "#3b82f6";
+              predictionColor = theme.primary;
             }
           }
         });
@@ -254,7 +313,7 @@ const App = () => {
       setCurrentLabel(null);
       forceUpdate();
     } else {
-      const label = recordMode === 'static' ? 'IDLE_STAT' : 'IDLE_DYN';
+      const label = recordMode === 'static' ? IGNORE_STATIC : IGNORE_DYNAMIC;
       setCurrentLabel(label);
       sequenceBufferRef.current = [];
       setIsIdleRecording(true);
@@ -273,96 +332,15 @@ const App = () => {
   };
 
   const trainModels = async () => {
-    setIsTraining(true);
-    
-    const classesStatic = [...new Set(datasetRef.current.static.map(d => d.label))].sort();
-    let newModelStatic = models.static;
-
-    if (classesStatic.length >= 2) {
-      const augmentedStatic = [
-        ...datasetRef.current.static,
-        ...datasetRef.current.static.flatMap(d => ([{ label: d.label, data: getMirroredStaticData3D(d.data) }]))
-      ];
-      
-      const xsStat = tf.tensor2d(augmentedStatic.map(d => d.data));
-      const ysStat = tf.tensor2d(augmentedStatic.map(d => {
-        const oneHot = new Array(classesStatic.length).fill(0);
-        oneHot[classesStatic.indexOf(d.label)] = 1; 
-        return oneHot;
-      }));
-
-      const mStat = tf.sequential();
-      mStat.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [63] }));
-      mStat.add(tf.layers.dense({ units: classesStatic.length, activation: 'softmax' }));
-      mStat.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
-      
-      await mStat.fit(xsStat, ysStat, { epochs: 30, shuffle: true });
-      newModelStatic = mStat;
-      xsStat.dispose(); ysStat.dispose();
-    }
-
-    const classesDynamic = [...new Set(datasetRef.current.dynamic.map(d => d.label))].sort();
-    let newModelDynamic = models.dynamic;
-
-    if (classesDynamic.length >= 2) {
-      const augmentedDynamic = [
-        ...datasetRef.current.dynamic,
-        ...datasetRef.current.dynamic.flatMap(d => ([
-            { label: d.label, data: getMirroredDynamicData2D(d.data) },
-            { label: d.label, data: addNoise(d.data, 0.005) },
-            { label: d.label, data: timeShift(d.data, 2) },
-            { label: d.label, data: timeShift(d.data, -2) }
-        ]))
-      ];
-
-      const xsDyn = tf.tensor3d(augmentedDynamic.map(d => d.data), [augmentedDynamic.length, SEQUENCE_LENGTH, 42]);
-      const ysDyn = tf.tensor2d(augmentedDynamic.map(d => {
-        const oneHot = new Array(classesDynamic.length).fill(0);
-        oneHot[classesDynamic.indexOf(d.label)] = 1; 
-        return oneHot;
-      }));
-
-      const mDyn = tf.sequential();
-      mDyn.add(tf.layers.conv1d({ filters: 32, kernelSize: 3, activation: 'relu', inputShape: [SEQUENCE_LENGTH, 42] }));
-      mDyn.add(tf.layers.maxPooling1d({ poolSize: 2 }));
-      mDyn.add(tf.layers.flatten());
-      mDyn.add(tf.layers.dense({ units: 32, activation: 'relu' }));
-      mDyn.add(tf.layers.dense({ units: classesDynamic.length, activation: 'softmax' }));
-      
-      mDyn.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
-      await mDyn.fit(xsDyn, ysDyn, { epochs: 40, shuffle: true });
-      
-      newModelDynamic = mDyn;
-      xsDyn.dispose(); ysDyn.dispose();
-    }
-
-    setModels({ static: newModelStatic, dynamic: newModelDynamic });
-    setIsTraining(false);
+    await runModelTraining(datasetRef, models, setModels, setIsTraining);
   };
 
   const handleExport = () => {
-    const dataStr = JSON.stringify({ static: datasetRef.current.static, dynamic: datasetRef.current.dynamic });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([dataStr], { type: "application/json" }));
-    a.download = "pjm_dataset_react.json"; a.click();
+    exportDataset({ static: datasetRef.current.static, dynamic: datasetRef.current.dynamic });
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const importedData = JSON.parse(evt.target?.result as string);
-        if (importedData.static) datasetRef.current.static.push(...importedData.static);
-        if (importedData.dynamic) datasetRef.current.dynamic.push(...importedData.dynamic);
-        setModels({ static: null, dynamic: null });
-        forceUpdate();
-        alert("Dataset załadowany pomyślnie.");
-      } catch (err) { alert("Błąd pliku!"); }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+  const handleImport = (e: ChangeEvent<HTMLInputElement>) => {
+    void handleImportDataset(e, datasetRef, setModels, forceUpdate);
   };
 
   const statsStatic = datasetRef.current.static.reduce((acc: any, val) => { acc[val.label] = (acc[val.label] || 0) + 1; return acc; }, {});
@@ -370,10 +348,10 @@ const App = () => {
   const canTrain = Object.keys(statsStatic).length >= 2 || Object.keys(statsDynamic).length >= 2;
 
   return (
-      <Container>
-        <Title>Rozpoznawanie PJM</Title>
-        
-        <ControlsPanel style={{ marginBottom: '20px' }}>
+    <Container>
+      <Title>Rozpoznawanie PJM</Title>
+
+      <ControlsPanel style={{ marginBottom: '20px' }}>
         <Select value={recordMode} onChange={(e) => setRecordMode(e.target.value as any)}>
           <option value="static">📸 Tryb: Statyczny</option>
           <option value="dynamic">🎞️ Tryb: Dynamiczny</option>
@@ -381,11 +359,11 @@ const App = () => {
         <Button $variant="idle" $isActive={isIdleRecording} onClick={toggleIdleRecording}>
           {isIdleRecording ? '⏹ Zatrzymaj Idle' : 'Nagrywaj tło (Idle)'}
         </Button>
-        <p style={{ margin: 0, color: '#94a3b8' }}>Trzymaj dowolną literę (np. A-Z) na klawiaturze, aby nagrać gest.</p>
+        <p style={{ margin: 0, color: theme.muted }}>Trzymaj dowolną literę (np. A-Z) na klawiaturze, aby nagrać gest.</p>
       </ControlsPanel>
 
       {(isRecording || isIdleRecording) && currentLabel && (
-        <h2 style={{ color: '#ef4444', marginTop: 0 }}>
+        <h2 style={{ color: theme.recording, marginTop: 0 }}>
           🔴 Nagrywanie ({recordMode}): {currentLabel}
         </h2>
       )}
@@ -393,9 +371,9 @@ const App = () => {
       <VideoWrapper>
         <video ref={videoRef} autoPlay playsInline muted width={feedWidth} height={feedHeight} />
         <canvas ref={canvasRef} width={feedWidth} height={feedHeight} />
-        
+
         {recordMode === 'dynamic' && (isRecording || isIdleRecording) && (
-          <div style={{ position: 'absolute', top: 0, left: 0, width: `${sequenceProgress}%`, height: '6px', background: '#ef4444', zIndex: 30, transition: 'width 0.1s' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, width: `${sequenceProgress}%`, height: '6px', background: theme.recording, zIndex: 30, transition: 'width 0.1s' }} />
         )}
 
         {predictions.length > 0 && (
@@ -413,12 +391,12 @@ const App = () => {
         <Button $variant="train" disabled={!canTrain || isTraining} onClick={trainModels}>
           {isTraining ? '⏳ Trenowanie...' : '🧠 Trenuj Modele'}
         </Button>
-        
+
         <input type="file" accept=".json" style={{ display: 'none' }} id="import-btn" onChange={handleImport} />
         <Button $variant="clear" onClick={() => document.getElementById('import-btn')?.click()}>
           📂 Importuj
         </Button>
-        
+
         <Button $variant="export" disabled={datasetRef.current.static.length === 0 && datasetRef.current.dynamic.length === 0} onClick={handleExport}>
           💾 Eksportuj
         </Button>

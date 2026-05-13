@@ -1,0 +1,32 @@
+export const colorNames = {
+    ebony: "#0F172A",
+    fuchsia: "#ec4899",
+    slate: "#334155",
+    slateDark: "#475569",
+    slateLight: "#64748b",
+    sky: "#3b82f6",
+    emerald: "#10B981",
+    amber: "#f59e0b",
+    flamingo: "#ef4444",
+    gray: "#94a3b8",
+    pearl: "#f8fafc",
+    charcoal: "#333333",
+    transparentWhite: "rgba(255,255,255,0.2)",
+}
+
+export const theme = {
+    background: colorNames.ebony,
+    surface: colorNames.slate,
+    primary: colorNames.sky,
+    secondary: colorNames.fuchsia,
+    text: colorNames.pearl,
+    textMuted: colorNames.charcoal,
+    disabled: colorNames.slateDark,
+    muted: colorNames.gray,
+    warning: colorNames.amber,
+    recording: colorNames.flamingo,
+    deleteHighlight: colorNames.flamingo,
+    success: colorNames.emerald,
+    neutral: colorNames.slateLight,
+    badgeControlBg: colorNames.transparentWhite,
+}
