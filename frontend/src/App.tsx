@@ -89,7 +89,6 @@ const App = () => {
   const feedWidth = 640;
   const feedHeight = 480;
 
-  // --- STANY UI ---
   const [isRecording, setIsRecording] = useState(false);
   const [isIdleRecording, setIsIdleRecording] = useState(false);
   const [currentLabel, setCurrentLabel] = useState<string | null>(null);
@@ -97,14 +96,11 @@ const App = () => {
   const [sequenceProgress, setSequenceProgress] = useState(0);
   const [isTraining, setIsTraining] = useState(false);
   
-  // Wymuszanie renderowania liczników
   const [, forceUpdate] = useReducer(x => x + 1, 0);
 
-  // --- MODELE I PREDYKCJE ---
   const [models, setModels] = useState<{ static: tf.LayersModel | null, dynamic: tf.LayersModel | null }>({ static: null, dynamic: null });
   const [predictions, setPredictions] = useState<{ handedness: string, label: string, color: string }[]>([]);
 
-  // --- REFERENCJE (aby unikać stale zmieniających się zależności w useCallback) ---
   const datasetRef = useRef({ static: [] as any[], dynamic: [] as any[] });
   const sequenceBufferRef = useRef<number[][]>([]);
   const isRecordingRef = useRef(isRecording);
@@ -113,18 +109,15 @@ const App = () => {
   const currentLabelRef = useRef(currentLabel);
   const modelsRef = useRef(models);
   
-  // Bufory do predykcji live
   const liveBuffersRef = useRef<{ Left: number[][], Right: number[][] }>({ Left: [], Right: [] });
   const dynamicHoldsRef = useRef<{ [key: string]: { label: string, expires: number } }>({ Left: { label: '', expires: 0 }, Right: { label: '', expires: 0 } });
 
-  // Aktualizacja referencji
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
   useEffect(() => { isIdleRecordingRef.current = isIdleRecording; }, [isIdleRecording]);
   useEffect(() => { recordModeRef.current = recordMode; }, [recordMode]);
   useEffect(() => { currentLabelRef.current = currentLabel; }, [currentLabel]);
   useEffect(() => { modelsRef.current = models; }, [models]);
 
-  // --- OBSŁUGA KLAWIATURY ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isIdleRecordingRef.current) return; 
@@ -135,7 +128,6 @@ const App = () => {
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (/^[a-zA-Z]$/.test(e.key) && !isIdleRecordingRef.current) {
-        // Zapisz resztkę dynamicznej sekwencji przy puszczeniu klawisza
         if (recordModeRef.current === 'dynamic' && sequenceBufferRef.current.length > 0) {
           const standardizedSeq = standardizeSequence(sequenceBufferRef.current, SEQUENCE_LENGTH);
           datasetRef.current.dynamic.push({ label: currentLabelRef.current, data: standardizedSeq });
@@ -155,7 +147,6 @@ const App = () => {
     };
   }, []);
 
-  // --- GŁÓWNA PĘTLA WYKRYWANIA (TICK) ---
   const handleDetection = useCallback((hands: Hand[]) => {
     if (hands.length === 0) {
       liveBuffersRef.current = { Left: [], Right: [] };
@@ -217,7 +208,6 @@ const App = () => {
             const scores = Array.from(prediction.dataSync());
             const maxScore = Math.max(...scores);
             const classIdx = scores.indexOf(maxScore);
-            // Uwaga: klasy muszą być przechowywane w stanie lub refach. Dla uproszczenia wyciągamy je z datasetu tu (wymaga by dataset nie był czyszczony po treningu)
             const classesDynamic = [...new Set(datasetRef.current.dynamic.map(d => d.label))].sort();
             const predictedClass = classesDynamic[classIdx];
 
@@ -229,7 +219,7 @@ const App = () => {
                 dynamicHoldsRef.current[handedness] = { label: finalPrediction, expires: now + 1500 };
                 predictionColor = "#ec4899";
                 dynamicFound = true;
-                liveBuffersRef.current[handedness as 'Left'|'Right'] = []; // Reset bufora po wykryciu
+                liveBuffersRef.current[handedness as 'Left'|'Right'] = [];
               }
             }
           }
@@ -380,10 +370,10 @@ const App = () => {
   const canTrain = Object.keys(statsStatic).length >= 2 || Object.keys(statsDynamic).length >= 2;
 
   return (
-    <Container>
-      <Title>Rozpoznawanie PJM</Title>
-      
-      <ControlsPanel style={{ marginBottom: '20px' }}>
+      <Container>
+        <Title>Rozpoznawanie PJM</Title>
+        
+        <ControlsPanel style={{ marginBottom: '20px' }}>
         <Select value={recordMode} onChange={(e) => setRecordMode(e.target.value as any)}>
           <option value="static">📸 Tryb: Statyczny</option>
           <option value="dynamic">🎞️ Tryb: Dynamiczny</option>
@@ -404,12 +394,10 @@ const App = () => {
         <video ref={videoRef} autoPlay playsInline muted width={feedWidth} height={feedHeight} />
         <canvas ref={canvasRef} width={feedWidth} height={feedHeight} />
         
-        {/* Pasek postępu nad widokiem kamery */}
         {recordMode === 'dynamic' && (isRecording || isIdleRecording) && (
           <div style={{ position: 'absolute', top: 0, left: 0, width: `${sequenceProgress}%`, height: '6px', background: '#ef4444', zIndex: 30, transition: 'width 0.1s' }} />
         )}
 
-        {/* Predykcje */}
         {predictions.length > 0 && (
           <PredictionsOverlay>
             {predictions.map((p, idx) => (
