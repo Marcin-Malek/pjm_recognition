@@ -1,9 +1,37 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 
-function getYouTubeId(url) {
+import youtubedl from 'youtube-dl-exec';
+import ffmpeg from 'fluent-ffmpeg';
+import sharp from 'sharp';
+import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-wasm';
+import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
+
+interface VideoSource {
+  url: string;
+  fps?: number;
+}
+
+interface Manifest {
+  sources: VideoSource[];
+}
+
+interface ProcessParams {
+  youtubeUrl: string;
+  outputJson: string;
+  tempDir: string;
+  fps: number;
+}
+
+interface WorkerDataInput {
+  workerId: number;
+  frames: string[];
+}
+
+function getYouTubeId(url: string): string {
   const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
   return match ? match[1] : 'unknown';
 }
@@ -12,10 +40,7 @@ function getYouTubeId(url) {
 // MAIN THREAD - Reads Manifest, Iterates Sources, Manages Workers
 // ============================================================================
 if (isMainThread) {
-  const youtubedl = require('youtube-dl-exec');
-  const ffmpeg = require('fluent-ffmpeg');
-
-  async function downloadYouTubeVideo(url, outPath) {
+  async function downloadYouTubeVideo(url: string, outPath: string): Promise<string> {
     console.log(`Downloading video from ${url} to ${outPath}`);
     console.time('[Time] Download');
     await youtubedl(url, {
@@ -28,7 +53,7 @@ if (isMainThread) {
     return outPath;
   }
 
-  async function extractFrames(videoPath, framesDir, fps) {
+  async function extractFrames(videoPath: string, framesDir: string, fps: number): Promise<string[]> {
     return new Promise((resolve, reject) => {
       console.time('[Time] Frame Extraction');
       console.log(`Extracting frames from ${videoPath} at ${fps} FPS to ${framesDir}`);
@@ -49,9 +74,9 @@ if (isMainThread) {
     });
   }
 
-  function runWorker(workerData) {
+  function runWorker(workerData: WorkerDataInput): Promise<any[]> {
     return new Promise((resolve, reject) => {
-      const worker = new Worker(__filename, { workerData });
+      const worker = new Worker(new URL(import.meta.url), { workerData });
       worker.on('message', resolve);
       worker.on('error', reject);
       worker.on('exit', (code) => {
@@ -60,7 +85,7 @@ if (isMainThread) {
     });
   }
 
-  async function processYouTubeVideo({ youtubeUrl, outputJson, tempDir, fps }) {
+  async function processYouTubeVideo({ youtubeUrl, outputJson, tempDir, fps }: ProcessParams): Promise<void> {
     console.time(`[Time] Total Execution (${getYouTubeId(youtubeUrl)})`);
 
     const videoPath = path.join(tempDir, 'video.mp4');
@@ -77,7 +102,7 @@ if (isMainThread) {
     console.time(`[Time] ML Detection (${numCores} workers)`);
 
     const chunkSize = Math.ceil(frameFiles.length / numCores);
-    const workerPromises = [];
+    const workerPromises: Promise<any[]>[] = [];
 
     for (let i = 0; i < numCores; i++) {
       const chunk = frameFiles.slice(i * chunkSize, (i + 1) * chunkSize);
@@ -113,7 +138,7 @@ if (isMainThread) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     console.log(`=== FOUND ${manifest.sources.length} SOURCES IN MANIFEST ===\n`);
 
     for (let i = 0; i < manifest.sources.length; i++) {
@@ -144,21 +169,18 @@ if (isMainThread) {
     console.log(`=== BATCH EXTRACTION COMPLETE ===`);
   }
 
-  main().catch(console.error);
+  if (import.meta.main) {
+    main().catch(console.error);
+  }
 
 } 
 // ============================================================================
 // WORKER THREAD - ML Inference isolated to a single CPU core
 // ============================================================================
 else {
-  const sharp = require('sharp');
-  const tf = require('@tensorflow/tfjs');
-  require('@tensorflow/tfjs-backend-wasm');
-  const handPoseDetection = require('@tensorflow-models/hand-pose-detection');
-
   async function processWorkerChunk() {
-    const { workerId, frames } = workerData;
-    const results = [];
+    const { workerId, frames } = workerData as WorkerDataInput;
+    const results: any[] = [];
 
     await tf.setBackend('wasm');
     await tf.ready();
@@ -184,11 +206,13 @@ else {
       }
     }
 
-    parentPort.postMessage(results);
+    if (parentPort) {
+      parentPort.postMessage(results);
+    }
   }
 
   processWorkerChunk().catch(err => {
-    console.error(`[Worker ${workerData.workerId} Error]:`, err);
+    console.error(`[Worker ${(workerData as WorkerDataInput).workerId} Error]:`, err);
     process.exit(1);
   });
 }

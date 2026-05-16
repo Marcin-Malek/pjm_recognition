@@ -1,4 +1,4 @@
-const fs = require('fs');
+import fs from 'fs';
 
 const file1Path = 'pjm_dynamic_dataset.json';
 const file2Path = 'pjm_static_dataset.json';
@@ -11,8 +11,8 @@ try {
     const file2 = JSON.parse(fs.readFileSync(file2Path, 'utf8'));
 
     const mergedData = {
-        static: [],
-        dynamic: []
+        static: [] as any[],
+        dynamic: [] as any[]
     };
 
     if (file1.static) mergedData.static.push(...file1.static);
@@ -30,7 +30,9 @@ try {
     console.log(`🎬 Dynamic result: ${mergedData.dynamic.length} sequences.`);
     console.log(`💾 Saved to: ${outputPath}`);
 
-} catch (err) {
+} catch (err: any) {
     console.error('\n❌ An error occurred. Please ensure the file names are correct and the files are located in the same directory as the script.');
-    console.error(err.message);
+    if (err.message) {
+        console.error(err.message);
+    }
 }

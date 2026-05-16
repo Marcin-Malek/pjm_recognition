@@ -1,14 +1,14 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const SEQUENCE_LENGTH = 30;
 
-function getYouTubeId(url) {
+function getYouTubeId(url: string) {
   const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
   return match ? match[1] : 'unknown';
 }
 
-function standardizeSequence(seq, targetLength) {
+function standardizeSequence(seq: any[], targetLength: number) {
   if (seq.length === 0) return new Array(targetLength).fill(new Array(42).fill(0));
   if (seq.length === targetLength) return seq;
   const result = [];
@@ -25,7 +25,7 @@ function standardizeSequence(seq, targetLength) {
   return result;
 }
 
-function buildDataset(manifestPath, rawDataDir, outputPath) {
+function buildDataset(manifestPath: string, rawDataDir: string, outputPath: string) {
   console.time('[Time] Dataset Build');
   
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -43,6 +43,7 @@ function buildDataset(manifestPath, rawDataDir, outputPath) {
     const rawData = JSON.parse(fs.readFileSync(rawFilePath, 'utf8'));
     const fps = source.fps || 30;
     
+    // @ts-expect-error
     const frames = rawData.map(dataPoint => {
       const match = dataPoint.frame.match(/frame-(\d+)\.jpg/);
       if (!match) return null;
@@ -60,23 +61,28 @@ function buildDataset(manifestPath, rawDataDir, outputPath) {
 
     if (hasLabels) {
       for (const label of source.labels) {
+        // @ts-expect-error
         const windowFrames = frames.filter(f => f.timestamp >= label.startSeconds && f.timestamp <= label.endSeconds);
+        // @ts-expect-error
         windowFrames.forEach(f => usedFrameTimestamps.add(f.timestamp));
 
         const reqHand = label.targetHand || 'Any';
-
+        // @ts-expect-error
         const extractedData = windowFrames.map(f => {
           if (!f.hands || f.hands.length === 0) return null;
           
           const targetHand = (reqHand !== 'Any') 
+          // @ts-expect-error
             ? f.hands.find(h => h.handedness === reqHand) 
             : f.hands[0];
           
           if (!targetHand) return null; 
 
           if (label.mode === 'static') {
+            // @ts-expect-error
             return targetHand.keypoints3D ? targetHand.keypoints3D.map(p => [p.x, p.y, p.z]).flat() : null;
           } else {
+            // @ts-expect-error
             return targetHand.keypoints.map(kp => [kp.x, kp.y]).flat();
           }
         }).filter(Boolean);
@@ -84,22 +90,26 @@ function buildDataset(manifestPath, rawDataDir, outputPath) {
         if (extractedData.length === 0) continue;
 
         if (label.mode === 'static') {
+          // @ts-expect-error
           extractedData.forEach(dataArray => {
+            // @ts-expect-error
             finalOutput.static.push({ label: label.gesture, data: dataArray });
           });
         } else if (label.mode === 'dynamic') {
           const standardized = standardizeSequence(extractedData, SEQUENCE_LENGTH);
+          // @ts-expect-error
           finalOutput.dynamic.push({ label: label.gesture, data: standardized });
         }
       }
     }
-
+    // @ts-expect-error
     const idleFrames = frames.filter(f => !usedFrameTimestamps.has(f.timestamp));
-    
+    // @ts-expect-error
     const idleData = idleFrames.map(f => {
       if (!f.hands || f.hands.length === 0) return null;
       
       const targetHand = (defaultHand !== 'Any') 
+      // @ts-expect-error
         ? f.hands.find(h => h.handedness === defaultHand) 
         : f.hands[0];
         
@@ -107,10 +117,13 @@ function buildDataset(manifestPath, rawDataDir, outputPath) {
     }).filter(Boolean);
 
     if (generateIdle.static) {
+      // @ts-expect-error
       idleData.filter((_, i) => i % 10 === 0).forEach(hand => {
         if (hand.keypoints3D) {
+          // @ts-expect-error
           finalOutput.static.push({ 
             label: 'IDLE_STAT', 
+            // @ts-expect-error
             data: hand.keypoints3D.map(p => [p.x, p.y, p.z]).flat() 
           });
         }
@@ -118,10 +131,12 @@ function buildDataset(manifestPath, rawDataDir, outputPath) {
     }
 
     if (generateIdle.dynamic) {
+      // @ts-expect-error
       const flat2DList = idleData.map(h => h.keypoints.map(kp => [kp.x, kp.y]).flat());
       for (let i = 0; i < flat2DList.length - SEQUENCE_LENGTH; i += SEQUENCE_LENGTH) {
         const chunk = flat2DList.slice(i, i + SEQUENCE_LENGTH);
         if (chunk.length === SEQUENCE_LENGTH) {
+          // @ts-expect-error
            finalOutput.dynamic.push({ label: 'IDLE_DYN', data: chunk });
         }
       }
@@ -137,7 +152,7 @@ function buildDataset(manifestPath, rawDataDir, outputPath) {
   console.timeEnd('[Time] Dataset Build');
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   const manifestPath = process.argv[2] || 'manifest.json';
   const rawDataDir = process.argv[3] || './datasets/raw_youtube';
   const outPath = process.argv[4] || 'datasets/youtube/output.json';
