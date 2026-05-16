@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef, useEffect, useReducer } from 'react';
 import type { ChangeEvent } from 'react';
 import styled from 'styled-components';
+import type { Hand } from '@tensorflow-models/hand-pose-detection';
 import * as tf from '@tensorflow/tfjs';
+import { IGNORE_DYNAMIC, IGNORE_STATIC, SEQUENCE_LENGTH } from '@pjm/shared/consts';
+import { standardizeSequence } from '@pjm/shared/normalization';
 import { useHandPose } from './hooks/useHandPose';
-import { IGNORE_DYNAMIC, IGNORE_STATIC, SEQUENCE_LENGTH } from './consts';
 import { theme } from './utils/colors';
-import { standardizeSequence } from './utils/mlUtils';
 import { exportDataset, handleImportDataset } from './utils/files';
 import { trainModels as runModelTraining } from './utils/modelTraining';
-import type { Hand } from '@tensorflow-models/hand-pose-detection';
 import { isKeypoint3D } from './utils/typeUtils';
 
 const Container = styled.div`

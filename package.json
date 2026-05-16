@@ -1,0 +1,14 @@
+{
+  "name": "pjm-recognition",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "data-tools",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:ui": "bun run --cwd frontend dev",
+    "build:data": "bun run --cwd data-tools pipeline",
+    "build:ui": "bun run --cwd frontend build"
+  }
+}

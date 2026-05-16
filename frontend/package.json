@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "tswatch": "tsc -b --watch",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pjm/shared": "workspace:*",
     "@mediapipe/hands": "^0.4.1675469240",
     "@tensorflow-models/hand-pose-detection": "^2.0.1",
     "@tensorflow/tfjs": "^4.22.0",

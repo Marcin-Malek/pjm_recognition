@@ -1,0 +1,10 @@
+{
+  "name": "@pjm/shared",
+  "version": "1.0.0",
+  "exports": {
+    "./types": "./types.ts",
+    "./consts": "./consts.ts",
+    "./normalization": "./normalization.ts",
+    "./augmentation": "./augmentation.ts"
+  }
+}

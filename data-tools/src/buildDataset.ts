@@ -1,28 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import { standardizeSequence } from '@pjm/shared/normalization';
 
 const SEQUENCE_LENGTH = 30;
 
 function getYouTubeId(url: string) {
   const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
   return match ? match[1] : 'unknown';
-}
-
-function standardizeSequence(seq: any[], targetLength: number) {
-  if (seq.length === 0) return new Array(targetLength).fill(new Array(42).fill(0));
-  if (seq.length === targetLength) return seq;
-  const result = [];
-  if (seq.length < targetLength) {
-    result.push(...seq);
-    const last = seq[seq.length - 1];
-    while (result.length < targetLength) result.push(last);
-  } else {
-    const step = (seq.length - 1) / (targetLength - 1);
-    for (let i = 0; i < targetLength; i++) {
-      result.push(seq[Math.round(i * step)]);
-    }
-  }
-  return result;
 }
 
 function buildDataset(manifestPath: string, rawDataDir: string, outputPath: string) {

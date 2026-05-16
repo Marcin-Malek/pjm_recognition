@@ -1,8 +1,7 @@
 {
-  "name": "youtube-hand-extract",
+  "name": "data-tools",
   "version": "1.0.0",
-  "description": "Extract hand keypoints from YouTube videos using MediaPipe Hands and TensorFlow.js (Node.js, headless)",
-  "main": "youtube-hand-extract.js",
+  "description": "Extract hand keypoints from YouTube videos using MediaPipe Hands and TensorFlow.js. Manage and preprocess the dataset for training hand gesture recognition models.",
   "type": "module",
   "scripts": {
     "extract": "bun run src/extractYT.ts",
@@ -11,6 +10,7 @@
     "pipeline": "bun run extract && bun run build"
   },
   "dependencies": {
+    "@pjm/shared": "workspace:*",
     "@tensorflow-models/hand-pose-detection": "^2.0.1",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-backend-wasm": "^4.22.0",

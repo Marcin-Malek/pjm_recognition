@@ -1,5 +1,6 @@
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
-import type { DatasetStructure, ModelsState } from '../types';
+import type { ModelsState } from '../types';
+import type { DatasetStructure } from '@pjm/shared/types';
 
 export const exportDataset = (dataset: DatasetStructure) => {
   const dataStr = JSON.stringify(dataset);

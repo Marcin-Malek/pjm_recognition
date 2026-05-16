@@ -1,8 +1,9 @@
 import * as tf from '@tensorflow/tfjs';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import { getMirroredDynamicData2D, getMirroredStaticData3D, addNoise, timeShift } from './mlUtils';
-import { SEQUENCE_LENGTH } from '../consts';
-import type { ModelsState, DatasetStructure } from '../types';
+import { getMirroredDynamicData2D, getMirroredStaticData3D, addNoise, timeShift } from '@pjm/shared/augmentation';
+import type { DatasetStructure } from '@pjm/shared/types';
+import { SEQUENCE_LENGTH } from '@pjm/shared/consts';
+import type { ModelsState } from '../types';
 
 const createOneHot = (classes: string[], label: string) => {
   const oneHot = new Array(classes.length).fill(0);

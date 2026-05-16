@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
-import { fingerJoints } from '../consts';
+import { fingerJoints } from '@pjm/shared/consts';
 
 import type { MediaPipeHandsTfjsModelConfig, HandDetector, Hand } from '@tensorflow-models/hand-pose-detection';
 
