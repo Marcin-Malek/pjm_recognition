@@ -1,0 +1,45 @@
+{
+  "project": "PJM_Recognition",
+  "sources": [
+    {
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "defaultHand": "Any",
+      "generateIdle": {
+        "static": true,
+        "dynamic": false
+      },
+      "labels": [] 
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=nTHYuPaSMRo",
+      "fps": 30,
+      "generateIdle": {
+        "static": true,
+        "dynamic": false
+      },
+      "labels": [
+        { "gesture": "a", "mode": "static", "startSeconds": 58.8, "endSeconds": 59.8, "targetHand": "Left" },
+        { "gesture": "a", "mode": "static", "startSeconds": 62.0, "endSeconds": 70.0, "targetHand": "Left" },
+        { "gesture": "a", "mode": "static", "startSeconds": 73.0, "endSeconds": 76.0, "targetHand": "Left" },
+        { "gesture": "a", "mode": "static", "startSeconds": 77.0, "endSeconds": 78.0, "targetHand": "Any" },
+        { "gesture": "a", "mode": "static", "startSeconds": 79.0, "endSeconds": 85.0, "targetHand": "Left" },
+        { "gesture": "a", "mode": "static", "startSeconds": 87.0, "endSeconds": 90.0, "targetHand": "Left" },
+        { "gesture": "b", "mode": "static", "startSeconds": 95.0, "endSeconds": 98.0, "targetHand": "Left" },
+        { "gesture": "l", "mode": "static", "startSeconds": 101.0, "endSeconds": 104.0, "targetHand": "Left" },
+        { "gesture": "c", "mode": "static", "startSeconds": 105.0, "endSeconds": 109.0, "targetHand": "Left" },
+        { "gesture": "c", "mode": "static", "startSeconds": 133.0, "endSeconds": 138.0, "targetHand": "Left" },
+        { "gesture": "i", "mode": "static", "startSeconds": 213.0, "endSeconds": 215.0, "targetHand": "Left" },
+        { "gesture": "l", "mode": "static", "startSeconds": 230.5, "endSeconds": 233.0, "targetHand": "Left" },
+        { "gesture": "m", "mode": "static", "startSeconds": 248.0, "endSeconds": 250.0, "targetHand": "Left" },
+        { "gesture": "n", "mode": "static", "startSeconds": 252.0, "endSeconds": 253.0, "targetHand": "Left" },
+        { "gesture": "n", "mode": "static", "startSeconds": 255.5, "endSeconds": 257.0, "targetHand": "Left" },
+        { "gesture": "n", "mode": "static", "startSeconds": 258.0, "endSeconds": 260.0, "targetHand": "Left" },
+        { "gesture": "o", "mode": "static", "startSeconds": 264.0, "endSeconds": 274.0, "targetHand": "Left" },
+        { "gesture": "p", "mode": "static", "startSeconds": 286.0, "endSeconds": 287.0, "targetHand": "Left" },
+        { "gesture": "p", "mode": "static", "startSeconds": 292.0, "endSeconds": 296.0, "targetHand": "Left" },
+        { "gesture": "r", "mode": "static", "startSeconds": 300.0, "endSeconds": 301.0, "targetHand": "Left" },
+        { "gesture": "r", "mode": "static", "startSeconds": 304.0, "endSeconds": 307.0, "targetHand": "Left" }
+      ]
+    }
+  ]
+}
