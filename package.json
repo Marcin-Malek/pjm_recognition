@@ -1,6 +1,7 @@
 {
   "name": "pjm-recognition",
   "private": true,
+  "type": "module",
   "workspaces": [
     "shared",
     "data-tools",
@@ -8,7 +9,28 @@
   ],
   "scripts": {
     "dev:ui": "bun run --cwd frontend dev",
+    "build:ui": "bun run --cwd frontend build",
     "build:data": "bun run --cwd data-tools pipeline",
-    "build:ui": "bun run --cwd frontend build"
+    "build": "bun run build:data && bun run build:ui",
+    "lint": "eslint .",
+    "lint:ui": "eslint frontend",
+    "lint:data": "eslint data-tools",
+    "typecheck": "tsc -b",
+    "typecheck:ui": "tsc -b frontend",
+    "typecheck:data": "tsc -b data-tools",
+    "tswatch": "tsc -b --watch",
+    "check": "bun run typecheck && bun run lint",
+    "clean": "rm -rf node_modules frontend/node_modules data-tools/node_modules"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.0",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^25.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.3"
   }
 }

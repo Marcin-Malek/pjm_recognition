@@ -7,7 +7,10 @@
     "extract": "bun run src/extractYT.ts",
     "build": "bun run src/buildDataset.ts",
     "merge": "bun run src/merge.ts",
-    "pipeline": "bun run extract && bun run build"
+    "pipeline": "bun run extract && bun run build",
+    "typecheck": "tsc -b",
+    "tswatch": "tsc -b --watch",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@pjm/shared": "workspace:*",

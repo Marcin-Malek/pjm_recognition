@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./shared" },
+    { "path": "./data-tools" },
+    { "path": "./frontend" }
+  ]
+}
