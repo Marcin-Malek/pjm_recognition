@@ -5,15 +5,22 @@ import { standardizeSequence } from '@pjm/shared/normalization';
 const SEQUENCE_LENGTH = 30;
 
 function getYouTubeId(url: string) {
+  // eslint-disable-next-line no-useless-escape
   const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
   return match ? match[1] : 'unknown';
 }
 
-function buildDataset(manifestPath: string, rawDataDir: string, outputPath: string) {
+function buildDataset(manifestPath: string, rawDataDir: string, outputDir: string) {
   console.time('[Time] Dataset Build');
   
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const finalOutput = { static: [], dynamic: [] };
+
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const outputPath = path.join(outputDir, 'output.json');
 
   for (const source of manifest.sources) {
     const videoId = getYouTubeId(source.url);
@@ -139,7 +146,7 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputPath: stri
 if (import.meta.main) {
   const manifestPath = process.argv[2] || 'manifest.json';
   const rawDataDir = process.argv[3] || './datasets/raw_youtube';
-  const outPath = process.argv[4] || 'datasets/youtube/output.json';
+  const outPath = process.argv[4] || 'datasets/youtube';
 
   if (!fs.existsSync(manifestPath)) {
     console.error(`ERROR: Manifest file not found at ${manifestPath}`);

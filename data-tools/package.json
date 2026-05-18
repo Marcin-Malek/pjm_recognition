@@ -24,5 +24,8 @@
   },
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.28"
-  }
+  },
+  "trustedDependencies": [
+    "youtube-dl-exec"
+  ]
 }
