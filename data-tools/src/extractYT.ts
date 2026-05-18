@@ -9,15 +9,8 @@ import sharp from 'sharp';
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-wasm';
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
-
-interface VideoSource {
-  url: string;
-  fps?: number;
-}
-
-interface Manifest {
-  sources: VideoSource[];
-}
+import { Manifest, RawVideoData } from './types';
+import { getYouTubeId } from './helpers';
 
 interface ProcessParams {
   youtubeUrl: string;
@@ -31,50 +24,11 @@ interface WorkerDataInput {
   frames: string[];
 }
 
-function getYouTubeId(url: string): string {
-  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-  return match ? match[1] : 'unknown';
-}
-
 // ============================================================================
 // MAIN THREAD - Reads Manifest, Iterates Sources, Manages Workers
 // ============================================================================
 if (isMainThread) {
-  async function downloadYouTubeVideo(url: string, outPath: string): Promise<string> {
-    console.log(`Downloading video from ${url} to ${outPath}`);
-    console.time('[Time] Download');
-    await youtubedl(url, {
-      output: outPath,
-      format: 'bestvideo[ext=mp4]/best[ext=mp4]',
-      noWarnings: true,
-      noCheckCertificates: true,
-    });
-    console.timeEnd('[Time] Download');
-    return outPath;
-  }
-
-  async function extractFrames(videoPath: string, framesDir: string, fps: number): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-      console.time('[Time] Frame Extraction');
-      console.log(`Extracting frames from ${videoPath} at ${fps} FPS to ${framesDir}`);
-      if (!fs.existsSync(framesDir)) fs.mkdirSync(framesDir, { recursive: true });
-      
-      ffmpeg(videoPath)
-        .output(path.join(framesDir, 'frame-%05d.jpg'))
-        .outputOptions([`-vf fps=${fps}`, '-q:v 2'])
-        .on('end', () => {
-          console.timeEnd('[Time] Frame Extraction');
-          const files = fs.readdirSync(framesDir)
-            .filter(f => f.endsWith('.jpg'))
-            .map(f => path.join(framesDir, f));
-          resolve(files);
-        })
-        .on('error', reject)
-        .run();
-    });
-  }
-
-  function runWorker(workerData: WorkerDataInput): Promise<any[]> {
+  function runWorker(workerData: WorkerDataInput): Promise<RawVideoData> {
     return new Promise((resolve, reject) => {
       const worker = new Worker(new URL(import.meta.url), { workerData });
       worker.on('message', resolve);
@@ -85,44 +39,93 @@ if (isMainThread) {
     });
   }
 
-  async function processYouTubeVideo({ youtubeUrl, outputJson, tempDir, fps }: ProcessParams): Promise<void> {
-    console.time(`[Time] Total Execution (${getYouTubeId(youtubeUrl)})`);
+  async function downloadYouTubeVideo(url: string, outPath: string): Promise<string> {
+    console.log(`Downloading video from ${url} to ${outPath}`);
+    const downloadTimeLabel = `Downloading Finished`;
+    console.time(downloadTimeLabel);
+    await youtubedl(url, {
+      output: outPath,
+      format: 'bestvideo[ext=mp4]/best[ext=mp4]',
+      noWarnings: true,
+      noCheckCertificates: true,
+    });
+    console.timeEnd(downloadTimeLabel);
+    return outPath;
+  }
 
-    const videoPath = path.join(tempDir, 'video.mp4');
-    const framesDir = path.join(tempDir, 'frames');
-    
-    if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
-    fs.mkdirSync(tempDir, { recursive: true });
+  async function extractFrames(videoPath: string, framesDir: string, fps: number): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      console.log(`Extracting frames from ${videoPath} at ${fps} FPS to ${framesDir}`);
+      const frameExtractionTimeLabel = `Frame Extraction Finished`;
+      console.time(frameExtractionTimeLabel);
+      if (!fs.existsSync(framesDir)) fs.mkdirSync(framesDir, { recursive: true });
+      
+      ffmpeg(videoPath)
+        .output(path.join(framesDir, 'frame-%05d.jpg'))
+        .outputOptions([`-vf fps=${fps}`, '-q:v 2'])
+        .on('end', () => {
+          console.timeEnd(frameExtractionTimeLabel);
+          const files = fs.readdirSync(framesDir)
+            .filter(f => f.endsWith('.jpg'))
+            .map(f => path.join(framesDir, f));
+          resolve(files);
+        })
+        .on('error', reject)
+        .run();
+    });
+  }
 
-    await downloadYouTubeVideo(youtubeUrl, videoPath);
-    const frameFiles = await extractFrames(videoPath, framesDir, fps);
+  async function processFramesWithWorkers(frameFiles: string[], numWorkers: number): Promise<RawVideoData> {
+    console.log(`Processing ${frameFiles.length} frames using ${numWorkers} worker threads...`);
+    const detectionTimeLabel = `ML Detection Finished (${numWorkers} workers)`;
+    console.time(detectionTimeLabel);
 
-    const numCores = Math.max(1, os.cpus().length - 1); 
-    console.log(`Processing ${frameFiles.length} frames using ${numCores} worker threads...`);
-    console.time(`[Time] ML Detection (${numCores} workers)`);
+    const chunkSize = Math.ceil(frameFiles.length / numWorkers);
+    const workerPromises: Promise<RawVideoData>[] = [];
 
-    const chunkSize = Math.ceil(frameFiles.length / numCores);
-    const workerPromises: Promise<any[]>[] = [];
-
-    for (let i = 0; i < numCores; i++) {
+    for (let i = 0; i < numWorkers; i++) {
       const chunk = frameFiles.slice(i * chunkSize, (i + 1) * chunkSize);
       if (chunk.length > 0) {
         workerPromises.push(runWorker({ workerId: i + 1, frames: chunk }));
       }
     }
-
     const workerResults = await Promise.all(workerPromises);
     const finalResults = workerResults.flat();
-    console.timeEnd(`[Time] ML Detection (${numCores} workers)`);
+    console.timeEnd(detectionTimeLabel);
+    return finalResults;
+  }
 
-    console.time(`[Time] JSON Save`);
+  async function processYouTubeVideo({ youtubeUrl, outputJson, tempDir, fps }: ProcessParams): Promise<void> {
+    const totalTimeLabel = `Finished Processing (${getYouTubeId(youtubeUrl)})`;
+    console.time(totalTimeLabel);
+
+    const videoPath = path.join(tempDir, 'video.mp4');
+    const framesDir = path.join(tempDir, 'frames');
+    
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    await downloadYouTubeVideo(youtubeUrl, videoPath);
+    const frameFiles = await extractFrames(videoPath, framesDir, fps);
+
+    const numCores = Math.max(1, os.cpus().length - 1); // get number of CPU cores, reserve 1 for main thread
+    const finalResults = await processFramesWithWorkers(frameFiles, numCores);
+
     console.log(`Saving results to ${outputJson}...`);
+    const jsonSaveTimeLabel = `JSON Write Finished`;
+    console.time(jsonSaveTimeLabel);
+
     fs.writeFileSync(outputJson, JSON.stringify(finalResults, null, 2));
-    console.timeEnd(`[Time] JSON Save`);
 
-    if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+    console.timeEnd(jsonSaveTimeLabel);
 
-    console.timeEnd(`[Time] Total Execution (${getYouTubeId(youtubeUrl)})`);
+    // TODO: Consider keeping temp files for debugging or future use instead of deleting immediately
+    if (fs.existsSync(tempDir)) { // Hardcoded cleanup
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    console.timeEnd(totalTimeLabel);
   }
 
   async function main() {
@@ -172,15 +175,13 @@ if (isMainThread) {
   if (import.meta.main) {
     main().catch(console.error);
   }
-
-} 
-// ============================================================================
-// WORKER THREAD - ML Inference isolated to a single CPU core
-// ============================================================================
-else {
+} else {
+  // ============================================================================
+  // WORKER THREAD - ML Inference isolated to a single CPU core
+  // ============================================================================
   async function processWorkerChunk() {
-    const { workerId, frames } = workerData as WorkerDataInput;
-    const results: any[] = [];
+    const { frames } = workerData as WorkerDataInput;
+    const results: RawVideoData = [];
 
     await tf.setBackend('wasm');
     await tf.ready();
@@ -210,7 +211,7 @@ else {
       parentPort.postMessage(results);
     }
   }
-
+  
   processWorkerChunk().catch(err => {
     console.error(`[Worker ${(workerData as WorkerDataInput).workerId} Error]:`, err);
     process.exit(1);

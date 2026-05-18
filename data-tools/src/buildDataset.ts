@@ -1,20 +1,17 @@
 import fs from 'fs';
 import path from 'path';
 import { standardizeSequence } from '@pjm/shared/normalization';
-
-const SEQUENCE_LENGTH = 30;
-
-function getYouTubeId(url: string) {
-  // eslint-disable-next-line no-useless-escape
-  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-  return match ? match[1] : 'unknown';
-}
+import { SEQUENCE_LENGTH } from '@pjm/shared/consts';
+import { BackgroundLabels, isKeypoint3D, type DatasetStructure } from '@pjm/shared/types';
+import type { Hand } from '@tensorflow-models/hand-pose-detection';
+import { FrameData, Manifest, RawFrameData } from './types';
+import { getYouTubeId } from './helpers';
 
 function buildDataset(manifestPath: string, rawDataDir: string, outputDir: string) {
   console.time('[Time] Dataset Build');
   
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  const finalOutput = { static: [], dynamic: [] };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Manifest;
+  const finalOutput: DatasetStructure = { static: [], dynamic: [] };
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -31,10 +28,9 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputDir: strin
       continue;
     }
 
-    const rawData = JSON.parse(fs.readFileSync(rawFilePath, 'utf8'));
+    const rawData = JSON.parse(fs.readFileSync(rawFilePath, 'utf8')) as RawFrameData[];
     const fps = source.fps || 30;
     
-    // @ts-expect-error
     const frames = rawData.map(dataPoint => {
       const match = dataPoint.frame.match(/frame-(\d+)\.jpg/);
       if (!match) return null;
@@ -42,93 +38,82 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputDir: strin
         ...dataPoint,
         timestamp: (parseInt(match[1], 10) - 1) / fps
       };
-    }).filter(Boolean);
+    }).filter((f): f is FrameData => f !== null);
 
-    let usedFrameTimestamps = new Set();
+    const usedFrameTimestamps = new Set<number>();
     
     const hasLabels = Array.isArray(source.labels) && source.labels.length > 0;
     const generateIdle = source.generateIdle || { static: !hasLabels, dynamic: !hasLabels };
     const defaultHand = source.defaultHand || 'Any';
 
-    if (hasLabels) {
+    if (hasLabels && source.labels) {
       for (const label of source.labels) {
-        // @ts-expect-error
+        
         const windowFrames = frames.filter(f => f.timestamp >= label.startSeconds && f.timestamp <= label.endSeconds);
-        // @ts-expect-error
         windowFrames.forEach(f => usedFrameTimestamps.add(f.timestamp));
 
         const reqHand = label.targetHand || 'Any';
-        // @ts-expect-error
+        
         const extractedData = windowFrames.map(f => {
           if (!f.hands || f.hands.length === 0) return null;
           
           const targetHand = (reqHand !== 'Any') 
-          // @ts-expect-error
             ? f.hands.find(h => h.handedness === reqHand) 
             : f.hands[0];
           
           if (!targetHand) return null; 
 
           if (label.mode === 'static') {
-            // @ts-expect-error
             return targetHand.keypoints3D ? targetHand.keypoints3D.map(p => [p.x, p.y, p.z]).flat() : null;
           } else {
-            // @ts-expect-error
             return targetHand.keypoints.map(kp => [kp.x, kp.y]).flat();
           }
-        }).filter(Boolean);
+        }).filter((d): d is number[] => d !== null);
 
         if (extractedData.length === 0) continue;
 
         if (label.mode === 'static') {
-          // @ts-expect-error
           extractedData.forEach(dataArray => {
-            // @ts-expect-error
             finalOutput.static.push({ label: label.gesture, data: dataArray });
           });
         } else if (label.mode === 'dynamic') {
           const standardized = standardizeSequence(extractedData, SEQUENCE_LENGTH);
-          // @ts-expect-error
           finalOutput.dynamic.push({ label: label.gesture, data: standardized });
         }
       }
     }
-    // @ts-expect-error
+    
     const idleFrames = frames.filter(f => !usedFrameTimestamps.has(f.timestamp));
-    // @ts-expect-error
+    
     const idleData = idleFrames.map(f => {
       if (!f.hands || f.hands.length === 0) return null;
       
+      // TODO: both hands case handling
       const targetHand = (defaultHand !== 'Any') 
-      // @ts-expect-error
         ? f.hands.find(h => h.handedness === defaultHand) 
         : f.hands[0];
         
-      return targetHand; 
-    }).filter(Boolean);
+      return targetHand || null; 
+    }).filter((h): h is Hand => h !== null);
 
     if (generateIdle.static) {
-      // @ts-expect-error
       idleData.filter((_, i) => i % 10 === 0).forEach(hand => {
         if (hand.keypoints3D) {
-          // @ts-expect-error
+          const typedKeypoints = hand.keypoints3D.filter(isKeypoint3D);
           finalOutput.static.push({ 
-            label: 'IDLE_STAT', 
-            // @ts-expect-error
-            data: hand.keypoints3D.map(p => [p.x, p.y, p.z]).flat() 
+            label: BackgroundLabels.STATIC, 
+            data: typedKeypoints.map(p => [p.x, p.y, p.z]).flat() 
           });
         }
       });
     }
 
     if (generateIdle.dynamic) {
-      // @ts-expect-error
       const flat2DList = idleData.map(h => h.keypoints.map(kp => [kp.x, kp.y]).flat());
       for (let i = 0; i < flat2DList.length - SEQUENCE_LENGTH; i += SEQUENCE_LENGTH) {
         const chunk = flat2DList.slice(i, i + SEQUENCE_LENGTH);
         if (chunk.length === SEQUENCE_LENGTH) {
-          // @ts-expect-error
-           finalOutput.dynamic.push({ label: 'IDLE_DYN', data: chunk });
+           finalOutput.dynamic.push({ label: BackgroundLabels.DYNAMIC, data: chunk });
         }
       }
     }
