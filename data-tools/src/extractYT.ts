@@ -33,9 +33,7 @@ if (isMainThread) {
       const worker = new Worker(new URL(import.meta.url), { workerData });
       worker.on('message', resolve);
       worker.on('error', reject);
-      worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
-      });
+      worker.on('exit', (code) => code !== 0 && reject(new Error(`Worker stopped with exit code ${code}`)));
     });
   }
 
@@ -58,7 +56,7 @@ if (isMainThread) {
       console.log(`Extracting frames from ${videoPath} at ${fps} FPS to ${framesDir}`);
       const frameExtractionTimeLabel = `Frame Extraction Finished`;
       console.time(frameExtractionTimeLabel);
-      if (!fs.existsSync(framesDir)) fs.mkdirSync(framesDir, { recursive: true });
+      !fs.existsSync(framesDir) && fs.mkdirSync(framesDir, { recursive: true });
       
       ffmpeg(videoPath)
         .output(path.join(framesDir, 'frame-%05d.jpg'))

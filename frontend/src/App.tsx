@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useReducer } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
 import styled from 'styled-components';
 import type { Hand } from '@tensorflow-models/hand-pose-detection';
@@ -71,12 +71,14 @@ const Select = styled.select`
 `;
 const Button = styled.button<{ $variant?: 'record' | 'export' | 'clear' | 'train' | 'idle', $isActive?: boolean }>`
   background-color: ${(props) => {
-    if (props.$variant === 'record') return props.$isActive ? theme.secondary : theme.primary;
-    if (props.$variant === 'export') return theme.warning;
-    if (props.$variant === 'clear') return theme.neutral;
-    if (props.$variant === 'train') return theme.success;
-    if (props.$variant === 'idle') return props.$isActive ? theme.secondary : theme.neutral;
-    return theme.primary;
+    switch (props.$variant) {
+      case 'record': return props.$isActive ? theme.secondary : theme.primary;
+      case 'export': return theme.warning;
+      case 'clear': return theme.neutral;
+      case 'train': return theme.success;
+      case 'idle': return props.$isActive ? theme.secondary : theme.neutral;
+      default: return theme.primary;
+    }
   }};
   color: white; 
   font-size: 1.1rem; 
@@ -155,7 +157,12 @@ const App = () => {
   const [sequenceProgress, setSequenceProgress] = useState(0);
   const [isTraining, setIsTraining] = useState(false);
 
-  const [, forceUpdate] = useReducer(x => x + 1, 0);
+  const [datasetInfo, setDatasetInfo] = useState({
+    staticStats: {} as Record<string, number>,
+    dynamicStats: {} as Record<string, number>,
+    staticCount: 0,
+    dynamicCount: 0,
+  });
 
   const [models, setModels] = useState<{ static: tf.LayersModel | null, dynamic: tf.LayersModel | null }>({ static: null, dynamic: null });
   const [predictions, setPredictions] = useState<{ handedness: string, label: string, color: string }[]>([]);
@@ -177,9 +184,29 @@ const App = () => {
   useEffect(() => { currentLabelRef.current = currentLabel; }, [currentLabel]);
   useEffect(() => { modelsRef.current = models; }, [models]);
 
+  const refreshDatasetUI = useCallback(() => {
+    const sStatic = datasetRef.current.static.reduce((acc: Record<string, number>, val) => { 
+      acc[val.label] = (acc[val.label] || 0) + 1; 
+      return acc; 
+    }, {});
+    const sDynamic = datasetRef.current.dynamic.reduce((acc: Record<string, number>, val) => { 
+      acc[val.label] = (acc[val.label] || 0) + 1; 
+      return acc; 
+    }, {});
+
+    setDatasetInfo({
+      staticStats: sStatic,
+      dynamicStats: sDynamic,
+      staticCount: datasetRef.current.static.length,
+      dynamicCount: datasetRef.current.dynamic.length
+    });
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || isIdleRecordingRef.current) return;
+      if (e.repeat || isIdleRecordingRef.current) {
+        return;
+      } 
       if (/^[a-zA-Z]$/.test(e.key)) {
         setCurrentLabel(e.key.toUpperCase());
         setIsRecording(true);
@@ -187,12 +214,12 @@ const App = () => {
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (/^[a-zA-Z]$/.test(e.key) && !isIdleRecordingRef.current) {
-        if (recordModeRef.current === 'dynamic' && sequenceBufferRef.current.length > 0) {
+        if (recordModeRef.current === 'dynamic' && currentLabelRef.current !== null && sequenceBufferRef.current.length > 0) {
           const standardizedSeq = standardizeSequence(sequenceBufferRef.current, SEQUENCE_LENGTH);
           datasetRef.current.dynamic.push({ label: currentLabelRef.current, data: standardizedSeq });
           sequenceBufferRef.current = [];
           setSequenceProgress(0);
-          forceUpdate();
+          refreshDatasetUI();
         }
         setIsRecording(false);
         setCurrentLabel(null);
@@ -204,7 +231,7 @@ const App = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [refreshDatasetUI]);
 
   const handleDetection = useCallback((hands: Hand[]) => {
     if (hands.length === 0) {
@@ -230,7 +257,7 @@ const App = () => {
       if ((isRecordingRef.current || isIdleRecordingRef.current) && currentLabelRef.current && isFirstHand) {
         if (recordModeRef.current === 'static') {
           datasetRef.current.static.push({ label: currentLabelRef.current, data: staticData });
-          if (isIdleRecordingRef.current && datasetRef.current.static.length % 30 === 0) forceUpdate();
+          isIdleRecordingRef.current && datasetRef.current.static.length % 30 === 0 && refreshDatasetUI();
         } else {
           sequenceBufferRef.current.push(dynamicData);
           setSequenceProgress((sequenceBufferRef.current.length / SEQUENCE_LENGTH) * 100);
@@ -239,16 +266,18 @@ const App = () => {
             datasetRef.current.dynamic.push({ label: currentLabelRef.current, data: [...sequenceBufferRef.current] });
             sequenceBufferRef.current = [];
             setSequenceProgress(0);
-            forceUpdate();
+            refreshDatasetUI();
           }
         }
       }
 
       if (!isRecordingRef.current && !isIdleRecordingRef.current) {
-        if (!liveBuffersRef.current[handedness as 'Left' | 'Right']) liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
+        if (!liveBuffersRef.current[handedness as 'Left' | 'Right']) {
+          liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
+        }
         const buffer = liveBuffersRef.current[handedness as 'Left' | 'Right'];
         buffer.push(dynamicData);
-        if (buffer.length > SEQUENCE_LENGTH) buffer.shift();
+        buffer.length > SEQUENCE_LENGTH && buffer.shift();
 
         let finalPrediction = "🤔";
         let predictionColor = "gray";
@@ -303,7 +332,7 @@ const App = () => {
     });
 
     setPredictions(currentPredictions);
-  }, []);
+  }, [refreshDatasetUI]);
 
   const { videoRef, canvasRef } = useHandPose(handleDetection);
 
@@ -311,7 +340,7 @@ const App = () => {
     if (isIdleRecording) {
       setIsIdleRecording(false);
       setCurrentLabel(null);
-      forceUpdate();
+      refreshDatasetUI();
     } else {
       const label = recordMode === 'static' ? BackgroundLabels.STATIC : BackgroundLabels.DYNAMIC;
       setCurrentLabel(label);
@@ -328,7 +357,7 @@ const App = () => {
       datasetRef.current.dynamic = datasetRef.current.dynamic.filter(d => d.label !== label);
       setModels(prev => ({ ...prev, dynamic: null }));
     }
-    forceUpdate();
+    refreshDatasetUI();
   };
 
   const trainModels = async () => {
@@ -340,19 +369,17 @@ const App = () => {
   };
 
   const handleImport = (e: ChangeEvent<HTMLInputElement>) => {
-    void handleImportDataset(e, datasetRef, setModels, forceUpdate);
+    void handleImportDataset(e, datasetRef, setModels, refreshDatasetUI);
   };
 
-  const statsStatic = datasetRef.current.static.reduce((acc: any, val) => { acc[val.label] = (acc[val.label] || 0) + 1; return acc; }, {});
-  const statsDynamic = datasetRef.current.dynamic.reduce((acc: any, val) => { acc[val.label] = (acc[val.label] || 0) + 1; return acc; }, {});
-  const canTrain = Object.keys(statsStatic).length >= 2 || Object.keys(statsDynamic).length >= 2;
+  const canTrain = Object.keys(datasetInfo.staticStats).length >= 2 || Object.keys(datasetInfo.dynamicStats).length >= 2;
 
   return (
     <Container>
       <Title>Rozpoznawanie PJM</Title>
 
       <ControlsPanel style={{ marginBottom: '20px' }}>
-        <Select value={recordMode} onChange={(e) => setRecordMode(e.target.value as any)}>
+        <Select value={recordMode} onChange={(e) => setRecordMode(e.target.value as typeof recordMode)}>
           <option value="static">📸 Tryb: Statyczny</option>
           <option value="dynamic">🎞️ Tryb: Dynamiczny</option>
         </Select>
@@ -397,20 +424,20 @@ const App = () => {
           📂 Importuj
         </Button>
 
-        <Button $variant="export" disabled={datasetRef.current.static.length === 0 && datasetRef.current.dynamic.length === 0} onClick={handleExport}>
+        <Button $variant="export" disabled={datasetInfo.staticCount === 0 && datasetInfo.dynamicCount === 0} onClick={handleExport}>
           💾 Eksportuj
         </Button>
       </ControlsPanel>
 
       <BadgeContainer>
-        {Object.entries(statsStatic).map(([label, count]) => (
+        {Object.entries(datasetInfo.staticStats).map(([label, count]) => (
           <Badge key={`s-${label}`} $type="static">
-            {label}: {count as number} (Statyczny) <DeleteBtn onClick={() => deleteData(label, 'static')}>✖</DeleteBtn>
+            {label}: {count} (Statyczny) <DeleteBtn onClick={() => deleteData(label, 'static')}>✖</DeleteBtn>
           </Badge>
         ))}
-        {Object.entries(statsDynamic).map(([label, count]) => (
+        {Object.entries(datasetInfo.dynamicStats).map(([label, count]) => (
           <Badge key={`d-${label}`} $type="dynamic">
-            {label}: {count as number} (Dynamiczny) <DeleteBtn onClick={() => deleteData(label, 'dynamic')}>✖</DeleteBtn>
+            {label}: {count} (Dynamiczny) <DeleteBtn onClick={() => deleteData(label, 'dynamic')}>✖</DeleteBtn>
           </Badge>
         ))}
       </BadgeContainer>

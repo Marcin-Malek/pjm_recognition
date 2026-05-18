@@ -29,9 +29,9 @@ export const addNoise = (sequence: number[][], noiseLevel = 0.005) => {
 
 export const timeShift = (sequence: number[][], shiftFrames: number) => {
   if (shiftFrames > 0) {
-    return [...sequence.slice(shiftFrames), ...Array(shiftFrames).fill(sequence[sequence.length - 1])];
+    return [...sequence.slice(shiftFrames), ...Array<number[]>(shiftFrames).fill(sequence[sequence.length - 1])];
   } else {
     const absShift = Math.abs(shiftFrames);
-    return [...Array(absShift).fill(sequence[0]), ...sequence.slice(0, sequence.length - absShift)];
+    return [...Array<number[]>(absShift).fill(sequence[0]), ...sequence.slice(0, sequence.length - absShift)];
   }
 };

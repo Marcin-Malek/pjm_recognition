@@ -19,6 +19,13 @@ export default tseslint.config(
         ...globals.node,
       },
     },
+    rules: {
+      ...tseslint.configs.recommended.rules,
+      "curly": ["error", "all"],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      "no-unused-expressions": "off",
+      "@typescript-eslint/no-unused-expressions": ["warn", { allowShortCircuit: true }],
+    },
   },
 
   {

@@ -33,11 +33,12 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputDir: strin
     
     const frames = rawData.map(dataPoint => {
       const match = dataPoint.frame.match(/frame-(\d+)\.jpg/);
-      if (!match) return null;
-      return {
-        ...dataPoint,
-        timestamp: (parseInt(match[1], 10) - 1) / fps
-      };
+      return !match ? 
+        null : 
+        {
+          ...dataPoint,
+          timestamp: (parseInt(match[1], 10) - 1) / fps
+        };
     }).filter((f): f is FrameData => f !== null);
 
     const usedFrameTimestamps = new Set<number>();
@@ -55,13 +56,17 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputDir: strin
         const reqHand = label.targetHand || 'Any';
         
         const extractedData = windowFrames.map(f => {
-          if (!f.hands || f.hands.length === 0) return null;
+          if (!f.hands?.length) {
+            return null;
+          } 
           
           const targetHand = (reqHand !== 'Any') 
             ? f.hands.find(h => h.handedness === reqHand) 
             : f.hands[0];
           
-          if (!targetHand) return null; 
+          if (!targetHand) {
+            return null;
+          } 
 
           if (label.mode === 'static') {
             return targetHand.keypoints3D ? targetHand.keypoints3D.map(p => [p.x, p.y, p.z]).flat() : null;
@@ -70,7 +75,9 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputDir: strin
           }
         }).filter((d): d is number[] => d !== null);
 
-        if (extractedData.length === 0) continue;
+        if (extractedData.length === 0) {
+          continue;
+        }
 
         if (label.mode === 'static') {
           extractedData.forEach(dataArray => {
@@ -86,8 +93,10 @@ function buildDataset(manifestPath: string, rawDataDir: string, outputDir: strin
     const idleFrames = frames.filter(f => !usedFrameTimestamps.has(f.timestamp));
     
     const idleData = idleFrames.map(f => {
-      if (!f.hands || f.hands.length === 0) return null;
-      
+      if (!f.hands?.length) {
+        return null;
+      }
+
       // TODO: both hands case handling
       const targetHand = (defaultHand !== 'Any') 
         ? f.hands.find(h => h.handedness === defaultHand) 

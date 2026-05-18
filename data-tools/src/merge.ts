@@ -16,11 +16,19 @@ try {
         dynamic: []
     };
 
-    if (file1.static) mergedData.static.push(...file1.static);
-    if (file2.static) mergedData.static.push(...file2.static);
+    if (file1.static) {
+        mergedData.static.push(...file1.static)
+    };
+    if (file2.static) {
+        mergedData.static.push(...file2.static)
+    };
 
-    if (file1.dynamic) mergedData.dynamic.push(...file1.dynamic);
-    if (file2.dynamic) mergedData.dynamic.push(...file2.dynamic);
+    if (file1.dynamic) {
+        mergedData.dynamic.push(...file1.dynamic)
+    };
+    if (file2.dynamic) {
+        mergedData.dynamic.push(...file2.dynamic)
+    };
 
     console.log('Writing merged file...\n');
     

@@ -22,8 +22,12 @@ export const importDataset = (
     reader.onload = (evt) => {
       try {
         const importedData = JSON.parse(evt.target?.result as string);
-        if (Array.isArray(importedData.static)) datasetRef.current.static.push(...importedData.static);
-        if (Array.isArray(importedData.dynamic)) datasetRef.current.dynamic.push(...importedData.dynamic);
+        if (Array.isArray(importedData.static) && datasetRef.current.static) {
+          datasetRef.current.static.push(...importedData.static);
+        }
+        if (Array.isArray(importedData.dynamic) && datasetRef.current.dynamic) {
+          datasetRef.current.dynamic.push(...importedData.dynamic);
+        }
         setModels({ static: null, dynamic: null });
         forceUpdate();
         alert('Dataset załadowany pomyślnie.');
@@ -50,7 +54,7 @@ export const handleImportDataset = async (
   forceUpdate: () => void,
 ) => {
   const file = event.target.files?.[0];
-  if (!file) return;
+  if (!file) {return};
 
   await importDataset(file, datasetRef, setModels, forceUpdate);
   event.target.value = '';
