@@ -206,12 +206,13 @@ const App = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isIdleRecordingRef.current) {
         return;
-      } 
+      }
       if (/^[a-zA-Z]$/.test(e.key)) {
         setCurrentLabel(e.key.toUpperCase());
         setIsRecording(true);
       }
     };
+
     const handleKeyUp = (e: KeyboardEvent) => {
       if (/^[a-zA-Z]$/.test(e.key) && !isIdleRecordingRef.current) {
         if (recordModeRef.current === 'dynamic' && currentLabelRef.current !== null && sequenceBufferRef.current.length > 0) {
@@ -219,12 +220,14 @@ const App = () => {
           datasetRef.current.dynamic.push({ label: currentLabelRef.current, data: standardizedSeq });
           sequenceBufferRef.current = [];
           setSequenceProgress(0);
-          refreshDatasetUI();
         }
+        refreshDatasetUI();
+
         setIsRecording(false);
         setCurrentLabel(null);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
