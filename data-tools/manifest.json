@@ -38,7 +38,18 @@
         { "gesture": "p", "mode": "static", "startSeconds": 286.0, "endSeconds": 287.0, "targetHand": "Left" },
         { "gesture": "p", "mode": "static", "startSeconds": 292.0, "endSeconds": 296.0, "targetHand": "Left" },
         { "gesture": "r", "mode": "static", "startSeconds": 300.0, "endSeconds": 301.0, "targetHand": "Left" },
-        { "gesture": "r", "mode": "static", "startSeconds": 304.0, "endSeconds": 307.0, "targetHand": "Left" }
+        { "gesture": "r", "mode": "static", "startSeconds": 304.0, "endSeconds": 307.0, "targetHand": "Left" },
+        { "gesture": "o", "mode": "static", "startSeconds": 319.0, "endSeconds": 321.0, "targetHand": "Left" },
+        { "gesture": "s", "mode": "static", "startSeconds": 323.0, "endSeconds": 326.0, "targetHand": "Left" },
+        { "gesture": "s", "mode": "static", "startSeconds": 327.5, "endSeconds": 329.0, "targetHand": "Left" },
+        { "gesture": "s", "mode": "static", "startSeconds": 330.0, "endSeconds": 331.0, "targetHand": "Left" },
+        { "gesture": "s", "mode": "static", "startSeconds": 333.5, "endSeconds": 335.0, "targetHand": "Left" },
+        { "gesture": "s", "mode": "static", "startSeconds": 336.0, "endSeconds": 341.0, "targetHand": "Left" },
+        { "gesture": "s", "mode": "static", "startSeconds": 355.0, "endSeconds": 362.0, "targetHand": "Left" },
+        { "gesture": "t", "mode": "static", "startSeconds": 371.0, "endSeconds": 381.0, "targetHand": "Left" },
+        { "gesture": "u", "mode": "static", "startSeconds": 384.0, "endSeconds": 389.0, "targetHand": "Left" },
+        { "gesture": "w", "mode": "static", "startSeconds": 391.0, "endSeconds": 396.0, "targetHand": "Left" },
+        { "gesture": "y", "mode": "static", "startSeconds": 398.0, "endSeconds": 401.0, "targetHand": "Left" }
       ]
     }
   ]
