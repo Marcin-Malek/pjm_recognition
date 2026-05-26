@@ -9,7 +9,7 @@ import { BackgroundLabels, isKeypoint3D, type DatasetStructure } from '@pjm/shar
 import { useHandPose } from './hooks/useHandPose';
 import { theme } from './utils/colors';
 import { exportDataset, handleImportDataset } from './utils/files';
-import { trainModels as runModelTraining } from './utils/modelTraining';
+import { trainModels } from '@pjm/shared/training';
 
 const Container = styled.div`
   display: flex; 
@@ -363,8 +363,17 @@ const App = () => {
     refreshDatasetUI();
   };
 
-  const trainModels = async () => {
-    await runModelTraining(datasetRef, models, setModels, setIsTraining);
+  const handleTrainModels = async () => {
+    setIsTraining(true); 
+  
+    try {
+      const updatedModels = await trainModels(datasetRef.current, models);
+      setModels(updatedModels);
+    } catch (error) {
+      console.error("Error during model training:", error);
+    } finally {
+      setIsTraining(false); 
+    }
   };
 
   const handleExport = () => {
@@ -418,7 +427,7 @@ const App = () => {
       </VideoWrapper>
 
       <ControlsPanel>
-        <Button $variant="train" disabled={!canTrain || isTraining} onClick={trainModels}>
+        <Button $variant="train" disabled={!canTrain || isTraining} onClick={handleTrainModels}>
           {isTraining ? '⏳ Trenowanie...' : '🧠 Trenuj Modele'}
         </Button>
 

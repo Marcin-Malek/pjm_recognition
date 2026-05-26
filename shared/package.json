@@ -5,6 +5,10 @@
     "./types": "./types.ts",
     "./consts": "./consts.ts",
     "./normalization": "./normalization.ts",
-    "./augmentation": "./augmentation.ts"
+    "./augmentation": "./augmentation.ts",
+    "./training": "./training.ts"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0"
   }
 }

@@ -1,9 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
-import type { Dispatch, RefObject, SetStateAction } from 'react';
-import { getMirroredDynamicData2D, getMirroredStaticData3D, addNoise, timeShift } from '@pjm/shared/augmentation';
-import type { DatasetStructure } from '@pjm/shared/types';
-import { SEQUENCE_LENGTH } from '@pjm/shared/consts';
-import type { ModelsState } from '../types';
+import { getMirroredDynamicData2D, getMirroredStaticData3D, addNoise, timeShift } from './augmentation';
+import type { DatasetStructure, Models } from './types';
+import { SEQUENCE_LENGTH } from './consts';
 
 const createOneHot = (classes: string[], label: string) => {
   const oneHot = new Array(classes.length).fill(0);
@@ -12,20 +10,17 @@ const createOneHot = (classes: string[], label: string) => {
 };
 
 export const trainModels = async (
-  datasetRef: RefObject<DatasetStructure>,
-  models: ModelsState,
-  setModels: Dispatch<SetStateAction<ModelsState>>,
-  setIsTraining: Dispatch<SetStateAction<boolean>>,
-) => {
-  setIsTraining(true);
-
-  const classesStatic = [...new Set(datasetRef.current.static.map((d) => d.label))].sort();
-  let newModelStatic = models.static;
+  dataset: DatasetStructure,
+  currentModels: Models = { static: null, dynamic: null }
+): Promise<Models> => {
+  
+  const classesStatic = [...new Set(dataset.static.map((d) => d.label))].sort();
+  let newModelStatic = currentModels.static;
 
   if (classesStatic.length >= 2) {
     const augmentedStatic = [
-      ...datasetRef.current.static,
-      ...datasetRef.current.static.flatMap((d) => [{ label: d.label, data: getMirroredStaticData3D(d.data) }]),
+      ...dataset.static,
+      ...dataset.static.flatMap((d) => [{ label: d.label, data: getMirroredStaticData3D(d.data) }]),
     ];
 
     const xsStat = tf.tensor2d(augmentedStatic.map((d) => d.data));
@@ -44,13 +39,13 @@ export const trainModels = async (
     ysStat.dispose();
   }
 
-  const classesDynamic = [...new Set(datasetRef.current.dynamic.map((d) => d.label))].sort();
-  let newModelDynamic = models.dynamic;
+  const classesDynamic = [...new Set(dataset.dynamic.map((d) => d.label))].sort();
+  let newModelDynamic = currentModels.dynamic;
 
   if (classesDynamic.length >= 2) {
     const augmentedDynamic = [
-      ...datasetRef.current.dynamic,
-      ...datasetRef.current.dynamic.flatMap((d) => [
+      ...dataset.dynamic,
+      ...dataset.dynamic.flatMap((d) => [
         { label: d.label, data: getMirroredDynamicData2D(d.data) },
         { label: d.label, data: addNoise(d.data, 0.005) },
         { label: d.label, data: timeShift(d.data, 2) },
@@ -82,6 +77,5 @@ export const trainModels = async (
     ysDyn.dispose();
   }
 
-  setModels({ static: newModelStatic, dynamic: newModelDynamic });
-  setIsTraining(false);
+  return { static: newModelStatic, dynamic: newModelDynamic };
 };

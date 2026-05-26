@@ -1,3 +1,10 @@
+import { LayersModel } from "@tensorflow/tfjs";
+
+export interface Models {
+  static: LayersModel | null;
+  dynamic: LayersModel | null;
+}
+
 export interface DatasetEntry {
   label: string;
   data: number[] | number[][];
