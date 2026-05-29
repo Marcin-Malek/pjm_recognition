@@ -40,19 +40,20 @@ export const useHandPose = (onDetection: (hands: Hand[]) => void) => {
       }
       isInitializing = true;
       try {
+        // TODO: make UI selectable config  
         detector = await handPoseDetection.createDetector(
           handPoseDetection.SupportedModels.MediaPipeHands,
-          {
-            runtime: 'mediapipe',
-            solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/',
-            modelType: 'lite',
-            maxHands: 2,
-          },
           // {
-          //   runtime: 'tfjs',
-          //   modelType: 'full',
+          //   runtime: 'mediapipe',
+          //   solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/',
+          //   modelType: 'lite',
           //   maxHands: 2,
-          // }
+          // },
+          {
+            runtime: 'tfjs',
+            modelType: 'full',
+            maxHands: 2,
+          }
         );
         detect();
       } catch (error) {

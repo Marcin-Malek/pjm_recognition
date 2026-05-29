@@ -34,6 +34,11 @@ export const trainModels = async (
     mStat.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
 
     await mStat.fit(xsStat, ysStat, { epochs: 30, shuffle: true });
+    const evalResultStatic = mStat.evaluate(xsStat, ysStat) as tf.Tensor[];
+    console.log(`📊 Static model evaluation:
+      Loss: ${evalResultStatic[0].dataSync()[0].toFixed(4)}, 
+      Accuracy: ${(evalResultStatic[1].dataSync()[0] * 100).toFixed(2)}%
+    `);
     newModelStatic = mStat;
     xsStat.dispose();
     ysStat.dispose();
@@ -47,9 +52,9 @@ export const trainModels = async (
       ...dataset.dynamic,
       ...dataset.dynamic.flatMap((d) => [
         { label: d.label, data: getMirroredDynamicData2D(d.data) },
-        { label: d.label, data: addNoise(d.data, 0.005) },
-        { label: d.label, data: timeShift(d.data, 2) },
-        { label: d.label, data: timeShift(d.data, -2) },
+        // { label: d.label, data: addNoise(d.data, 0.005) },
+        // { label: d.label, data: timeShift(d.data, 2) },
+        // { label: d.label, data: timeShift(d.data, -2) },
       ]),
     ];
 
@@ -67,10 +72,16 @@ export const trainModels = async (
     mDyn.add(tf.layers.maxPooling1d({ poolSize: 2 }));
     mDyn.add(tf.layers.flatten());
     mDyn.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+    mDyn.add(tf.layers.dropout({ rate: 0.3 }));
     mDyn.add(tf.layers.dense({ units: classesDynamic.length, activation: 'softmax' }));
 
     mDyn.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
     await mDyn.fit(xsDyn, ysDyn, { epochs: 40, shuffle: true });
+    const evalResultDynamic = mDyn.evaluate(xsDyn, ysDyn) as tf.Tensor[];
+    console.log(`📊 Dynamic model evaluation
+      Loss: ${evalResultDynamic[0].dataSync()[0].toFixed(4)}, 
+      Accuracy: ${(evalResultDynamic[1].dataSync()[0] * 100).toFixed(2)}%
+    `);
 
     newModelDynamic = mDyn;
     xsDyn.dispose();

@@ -74,18 +74,17 @@ const Predictor = () => {
                     const scores = Array.from(prediction.dataSync());
                     const maxScore = Math.max(...scores);
                     const classIdx = scores.indexOf(maxScore);
-                    // const classesDynamic = [...new Set(datasetRef.current.dynamic.map(d => d.label))].sort();
                     const predictedClass = classesRef.current.dynamic[classIdx];
 
                     if (maxScore > 0.8) {
                         if (predictedClass === BackgroundLabels.DYNAMIC) {
-                            liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
+                            liveBuffersRef.current[handedness] = [];
                         } else {
                             finalPrediction = `${predictedClass}`;
                             dynamicHoldsRef.current[handedness] = { label: finalPrediction, expires: now + 1500 };
                             predictionColor = theme.secondary;
                             dynamicFound = true;
-                            liveBuffersRef.current[handedness as 'Left' | 'Right'] = [];
+                            liveBuffersRef.current[handedness] = [];
                         }
                     }
                 }
