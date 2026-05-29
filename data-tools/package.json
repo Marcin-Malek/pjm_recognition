@@ -7,7 +7,8 @@
     "extract": "bun run src/extractYT.ts",
     "build": "bun run src/buildDataset.ts",
     "merge": "bun run src/merge.ts",
-    "pipeline": "bun run extract && bun run build",
+    "train": "npm rebuild @tensorflow/tfjs-node --build-addon-from-source && bun run src/trainModels.ts",
+    "pipeline": "bun run extract && bun run build && bun run train",
     "typecheck": "tsc -b",
     "tswatch": "tsc -b --watch",
     "lint": "eslint ."

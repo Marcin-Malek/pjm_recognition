@@ -4,6 +4,7 @@ import * as path from 'path';
 import { trainModels } from '@pjm/shared/training';
 import type { DatasetStructure } from '@pjm/shared/types';
 
+// TODO: make paths configurable through arguments
 const labeledDatasetPath = './datasets/manual_recorded/pjm_hybrid_dataset.json';
 const idleDatasetPath = './datasets/manual_recorded/pjm_hybrid_idle_dataset.json';
 

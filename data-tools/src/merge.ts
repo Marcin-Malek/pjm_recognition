@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { DatasetStructure } from '@pjm/shared/types';
 
+// TODO: read paths as arguments
 const file1Path = 'pjm_dynamic_dataset.json';
 const file2Path = 'pjm_static_dataset.json';
 const outputPath = 'pjm_hybrid_dataset.json';
